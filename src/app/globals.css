@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --iron: #0E0D0B;
+  --bone: #F6F2E8;
+  --vermilion: #E83C1E;
+  --oxide: #8AA9A0;
+}
+
+body {
+  background-color: var(--bone);
+  color: var(--iron);
+}
