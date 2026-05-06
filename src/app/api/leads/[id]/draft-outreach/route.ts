@@ -1,41 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
-import { complete } from '@/lib/anthropic'
+import { generateDraftForLead } from '@/lib/draft-outreach'
 
 export const runtime = 'nodejs'
-
-const PROMPT_VERSION = 'v1-2026-05-06'
-
-const SYSTEM_PROMPT = `You are a senior B2B copywriter for Rainey Laguna, a boutique web-development studio in Lima, Peru. You write the first WhatsApp message a sales rep sends to a Peruvian small-business owner who has never heard of us.
-
-Constraints:
-- Spanish (Peruvian register, neutral). Voseo NEVER. Use tú.
-- 2 short paragraphs, max 90 words total.
-- One concrete observation about THEIR business (district, niche, website status, evaluation, or strategic action — whichever is most specific). NEVER invent facts not present in the brief.
-- One specific, low-friction next step (e.g., "te mando un Loom de 90 segundos con dos cambios concretos").
-- No emojis. No exclamation marks beyond the greeting. No "espero que te encuentres bien".
-- Sign off as "— Equipo Rainey Laguna" on its own line.
-- Output ONLY the message body. No preface, no headers, no quotes.`
-
-function buildUserPrompt(lead: Record<string, unknown>): string {
-  const lines: string[] = []
-  const push = (label: string, val: unknown) => {
-    if (val === null || val === undefined || val === '') return
-    lines.push(`- ${label}: ${String(val)}`)
-  }
-  push('Nombre del contacto', lead.name)
-  push('Distrito', lead.district)
-  push('Nicho', lead.niche)
-  push('Categoría', lead.category)
-  push('Website', lead.website_url)
-  push('Estado del website', lead.website_status)
-  push('Evaluación', lead.evaluation)
-  push('Acción estratégica sugerida', lead.strategic_action)
-  push('Potencial', lead.potential)
-  push('Instagram activo', lead.instagram_active)
-  push('Notas internas', lead.notes)
-  return `Datos del prospecto:\n${lines.join('\n')}\n\nEscribe el primer mensaje de WhatsApp.`
-}
 
 /** POST → generate a fresh draft. Returns the new draft row. */
 export async function POST(
@@ -48,21 +15,8 @@ export async function POST(
     if (leadRes.rows.length === 0) {
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
     }
-    const lead = leadRes.rows[0]
-
-    const { text, model } = await complete({
-      system: SYSTEM_PROMPT,
-      user: buildUserPrompt(lead),
-    })
-
-    const insert = await pool.query(
-      `INSERT INTO crm_outreach_drafts
-         (lead_id, channel, body, model, prompt_version, status)
-       VALUES ($1, 'WhatsApp', $2, $3, $4, 'pending')
-       RETURNING *`,
-      [id, text, model, PROMPT_VERSION]
-    )
-    return NextResponse.json(insert.rows[0], { status: 201 })
+    const draft = await generateDraftForLead(pool, leadRes.rows[0])
+    return NextResponse.json(draft, { status: 201 })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'unknown error'
     console.error('[draft-outreach] generate failed', message)
