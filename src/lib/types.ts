@@ -15,6 +15,8 @@ export type Lead = {
   potential: string | null
   pipeline_stage: 'Lead' | 'Contacted' | 'Audited' | 'Proposal' | 'Closed'
   notes: string | null
+  next_action: string | null
+  snoozed_until: string | null
   created_at: string
   updated_at: string
 }

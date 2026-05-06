@@ -119,6 +119,21 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     load()
   }
 
+  /**
+   * Snooze the lead for N days. Pass 0 to clear the snooze.
+   * The list page hides snoozed leads by default.
+   */
+  const snoozeFor = async (days: number) => {
+    const until =
+      days > 0 ? new Date(Date.now() + days * 86400_000).toISOString() : null
+    await fetch(`/api/leads/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ snoozed_until: until }),
+    })
+    load()
+  }
+
   const updateStage = async (stage: string) => {
     await fetch(`/api/leads/${id}`, {
       method: 'PATCH',
@@ -236,6 +251,65 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             value={editing ? <input className="border p-1 rounded w-full" value={form.strategic_action ?? ''} onChange={(e) => setForm({ ...form, strategic_action: e.target.value })} /> : (lead.strategic_action || '—')}
           />
           <Field label="Potential" value={lead.potential} />
+        </div>
+
+        <div className="mt-6 grid md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium mb-2">Next Action</label>
+            <input
+              type="text"
+              defaultValue={lead.next_action ?? ''}
+              onBlur={(e) => {
+                const v = e.target.value.trim()
+                if (v === (lead.next_action ?? '')) return
+                fetch(`/api/leads/${id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ next_action: v || null }),
+                }).then(load)
+              }}
+              placeholder='e.g. "Send Loom audit", "Follow up after proposal"'
+              className="border p-2 rounded w-full"
+            />
+            <p className="text-xs text-gray-400 mt-1">Saved on blur. Shown in the leads list.</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Snooze
+              {lead.snoozed_until && (
+                <span className={`ml-2 text-xs px-2 py-0.5 rounded ${
+                  new Date(lead.snoozed_until).getTime() <= Date.now()
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-blue-100 text-blue-800'
+                }`}>
+                  {new Date(lead.snoozed_until).getTime() <= Date.now()
+                    ? `expired ${new Date(lead.snoozed_until).toLocaleDateString()}`
+                    : `until ${new Date(lead.snoozed_until).toLocaleDateString()}`}
+                </span>
+              )}
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {[1, 3, 7, 14, 30].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => snoozeFor(d)}
+                  className="px-2.5 py-1 border rounded text-xs hover:bg-gray-50"
+                  title={`Snooze until ${new Date(Date.now() + d * 86400_000).toLocaleDateString()}`}
+                >
+                  {d}d
+                </button>
+              ))}
+              {lead.snoozed_until && (
+                <button
+                  onClick={() => snoozeFor(0)}
+                  className="px-2.5 py-1 border border-amber-300 text-amber-700 rounded text-xs hover:bg-amber-50"
+                >
+                  Wake up
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Hidden from default leads list while snoozed.</p>
+          </div>
         </div>
 
         <div className="mt-6">

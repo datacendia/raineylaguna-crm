@@ -15,7 +15,7 @@ function whatsappLink(phone: string, name: string): string {
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState({ district: 'all', niche: 'all', stage: 'all', search: '' })
+  const [filters, setFilters] = useState({ district: 'all', niche: 'all', stage: 'all', search: '', includeSnoozed: false })
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkStage, setBulkStage] = useState<string>('Contacted')
   const [bulkBusy, setBulkBusy] = useState(false)
@@ -26,13 +26,14 @@ export default function LeadsPage() {
     if (filters.district !== 'all') params.set('district', filters.district)
     if (filters.niche !== 'all') params.set('niche', filters.niche)
     if (filters.stage !== 'all') params.set('stage', filters.stage)
+    if (filters.includeSnoozed) params.set('include_snoozed', 'true')
     fetch(`/api/leads?${params}`)
       .then((r) => r.json())
       .then((data) => {
         setLeads(Array.isArray(data) ? data : [])
         setLoading(false)
       })
-  }, [filters.district, filters.niche, filters.stage])
+  }, [filters.district, filters.niche, filters.stage, filters.includeSnoozed])
 
   const filtered = filters.search
     ? leads.filter((l) => l.name.toLowerCase().includes(filters.search.toLowerCase()))
@@ -91,6 +92,14 @@ export default function LeadsPage() {
             {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
+        <label className="flex items-center gap-2 text-sm text-gray-600 mt-3">
+          <input
+            type="checkbox"
+            checked={filters.includeSnoozed}
+            onChange={(e) => setFilters({ ...filters, includeSnoozed: e.target.checked })}
+          />
+          Include snoozed leads
+        </label>
       </div>
 
       {selected.size > 0 && (
@@ -115,6 +124,7 @@ export default function LeadsPage() {
               <th className="text-left p-3">District</th>
               <th className="text-left p-3">Niche</th>
               <th className="text-left p-3">Stage</th>
+              <th className="text-left p-3">Next Action</th>
               <th className="text-left p-3">Website</th>
               <th className="text-left p-3">Evaluation</th>
               <th className="text-left p-3">Strategic Action</th>
@@ -123,17 +133,32 @@ export default function LeadsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9} className="p-6 text-gray-500">Loading…</td></tr>
+              <tr><td colSpan={10} className="p-6 text-gray-500">Loading…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={9} className="p-6 text-gray-500">No leads match these filters.</td></tr>
-            ) : filtered.map((l) => (
-              <tr key={l.id} className="border-b hover:bg-gray-50">
+              <tr><td colSpan={10} className="p-6 text-gray-500">No leads match these filters.</td></tr>
+            ) : filtered.map((l) => {
+              const snoozeMs = l.snoozed_until ? new Date(l.snoozed_until).getTime() : null
+              const snoozeExpired = snoozeMs !== null && snoozeMs <= Date.now()
+              const snoozeActive = snoozeMs !== null && snoozeMs > Date.now()
+              return (
+              <tr key={l.id} className={`border-b hover:bg-gray-50 ${snoozeExpired ? 'bg-amber-50/40' : ''} ${snoozeActive ? 'opacity-60' : ''}`}>
                 <td className="p-3"><input type="checkbox" checked={selected.has(l.id)} onChange={() => toggleOne(l.id)} /></td>
-                <td className="p-3"><Link href={`/dashboard/leads/${l.id}`} className="text-vermilion hover:underline">{l.name}</Link></td>
+                <td className="p-3">
+                  <Link href={`/dashboard/leads/${l.id}`} className="text-vermilion hover:underline">{l.name}</Link>
+                  {snoozeExpired && (
+                    <span className="ml-2 text-[10px] uppercase tracking-wide bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded" title="Snooze ended — needs attention">⏰ due</span>
+                  )}
+                  {snoozeActive && (
+                    <span className="ml-2 text-[10px] uppercase tracking-wide bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded" title={`Snoozed until ${new Date(snoozeMs!).toLocaleDateString()}`}>💤 {new Date(snoozeMs!).toLocaleDateString()}</span>
+                  )}
+                </td>
                 <td className="p-3 text-sm">{l.district}</td>
                 <td className="p-3 text-sm">{l.niche}</td>
                 <td className="p-3 text-sm">
                   <span className="px-2 py-1 rounded-full bg-gray-100 text-xs">{l.pipeline_stage}</span>
+                </td>
+                <td className="p-3 text-sm text-gray-700 max-w-xs truncate" title={l.next_action ?? ''}>
+                  {l.next_action ?? <span className="text-gray-300">—</span>}
                 </td>
                 <td className="p-3 text-sm text-gray-600">{l.website_status ?? '—'}</td>
                 <td className="p-3 text-sm text-gray-600">{l.evaluation ?? '—'}</td>
@@ -155,7 +180,7 @@ export default function LeadsPage() {
                   )}
                 </td>
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
       </div>
