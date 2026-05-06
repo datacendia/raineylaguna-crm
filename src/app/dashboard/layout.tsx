@@ -19,6 +19,7 @@ export default function DashboardLayout({
         <h2 className="text-2xl font-bold mb-8">Rainey Laguna CRM</h2>
         <nav className="space-y-4 flex-1">
           <Link href="/dashboard" className="block hover:text-vermilion">Dashboard</Link>
+          <Link href="/dashboard/digest" className="block hover:text-vermilion">Monday digest</Link>
           <Link href="/dashboard/leads" className="block hover:text-vermilion">Leads</Link>
           <Link href="/dashboard/pipeline" className="block hover:text-vermilion">Pipeline</Link>
           <Link href="/dashboard/outreach" className="block hover:text-vermilion">Outreach</Link>
