@@ -25,8 +25,9 @@ REDIS_URL=redis://localhost:6379
 
 4. Run database schema:
 ```bash
-psql -U user -d raineylaguna -f ../raineylaguna/database/crm-schema.sql
+psql -U user -d raineylaguna -f database/crm-schema.sql
 ```
+(Or, against a Railway-managed Postgres after deploy, use `npm run migrate` — see `DEPLOY.md`.)
 
 5. Seed initial leads (~330 from the Lima report):
 ```bash
@@ -42,6 +43,12 @@ npm run dev
 ```bash
 npm run worker
 ```
+
+> **Note for Railway deploys.** The `Procfile` `web` and `worker` lines do **not**
+> auto-spawn two processes on Railway — Railway ignores Procfile process types.
+> The worker must be added as a **separate Railway service** pointing at the
+> same repo with `Start Command: npm run worker`. Step-by-step in `DEPLOY.md`
+> §2 ("Provision the project").
 
 ## Features
 
