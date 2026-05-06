@@ -36,6 +36,9 @@ CREATE TYPE crm_outreach_status AS ENUM (
 CREATE TABLE crm_leads (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name VARCHAR(255) NOT NULL,
+  email VARCHAR(255),
+  phone VARCHAR(50),
+  source VARCHAR(100),
   district VARCHAR(100) NOT NULL,
   niche VARCHAR(100) NOT NULL,
   category VARCHAR(100),
@@ -85,6 +88,9 @@ CREATE TABLE crm_video_audits (
 -- Indexes for performance
 CREATE INDEX idx_crm_leads_district ON crm_leads(district);
 CREATE INDEX idx_crm_leads_niche ON crm_leads(niche);
+CREATE INDEX idx_crm_leads_email ON crm_leads(email);
+CREATE INDEX idx_crm_leads_phone ON crm_leads(phone);
+CREATE INDEX idx_crm_leads_source ON crm_leads(source);
 CREATE INDEX idx_crm_leads_website_status ON crm_leads(website_status);
 CREATE INDEX idx_crm_leads_pipeline_stage ON crm_leads(pipeline_stage);
 CREATE INDEX idx_crm_leads_evaluation ON crm_leads(evaluation);

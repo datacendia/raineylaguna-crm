@@ -8,6 +8,19 @@ import ScriptPanel from '@/components/ScriptPanel'
 
 type LeadResponse = { lead: Lead; outreach: OutreachEvent[]; audits: VideoAudit[] }
 
+/**
+ * Build a wa.me deep link from a Peruvian phone number. Strips non-digits,
+ * prepends 51 country code if not already present, and pre-fills a friendly
+ * Spanish greeting using the lead's first name.
+ */
+function whatsappLink(phone: string, name: string): string {
+  const digits = phone.replace(/\D/g, '')
+  const e164 = digits.startsWith('51') ? digits : `51${digits}`
+  const firstName = name.trim().split(/\s+/)[0] ?? ''
+  const text = encodeURIComponent(`Hola ${firstName}, te escribo de Rainey Laguna.`)
+  return `https://wa.me/${e164}?text=${text}`
+}
+
 export default function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
@@ -79,8 +92,33 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     <div className="p-8 max-w-5xl">
       <Link href="/dashboard/leads" className="text-sm text-gray-500 hover:underline">← Back to leads</Link>
       <div className="flex justify-between items-start mt-2 mb-6">
-        <h1 className="text-4xl font-bold">{lead.name}</h1>
-        <div className="space-x-2">
+        <div>
+          <h1 className="text-4xl font-bold">{lead.name}</h1>
+          {lead.source && (
+            <p className="text-xs text-gray-400 font-mono mt-1">via {lead.source}</p>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2 items-start">
+          {lead.phone && (
+            <a
+              href={whatsappLink(lead.phone, lead.name)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm"
+              title={`Open WhatsApp chat with ${lead.phone}`}
+            >
+              <span aria-hidden>💬</span> WhatsApp
+            </a>
+          )}
+          {lead.email && (
+            <a
+              href={`mailto:${lead.email}?subject=${encodeURIComponent(`Hola ${lead.name.split(' ')[0]}`)}`}
+              className="inline-flex items-center gap-1.5 px-3 py-1 border rounded text-sm"
+              title={`Email ${lead.email}`}
+            >
+              <span aria-hidden>✉️</span> Email
+            </a>
+          )}
           {!editing ? (
             <button onClick={() => setEditing(true)} className="px-3 py-1 border rounded">Edit</button>
           ) : (
@@ -95,6 +133,20 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
 
       <div className="bg-white rounded-lg shadow p-6 mb-6">
         <div className="grid grid-cols-2 gap-4 text-sm">
+          <Field
+            label="Phone"
+            value={editing
+              ? <input className="border p-1 rounded w-full" value={form.phone ?? ''} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+51 999 888 777" />
+              : (lead.phone
+                  ? <a href={whatsappLink(lead.phone, lead.name)} target="_blank" rel="noopener noreferrer" className="text-green-700 hover:underline">{lead.phone}</a>
+                  : '—')}
+          />
+          <Field
+            label="Email"
+            value={editing
+              ? <input className="border p-1 rounded w-full" value={form.email ?? ''} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="alguien@ejemplo.com" />
+              : (lead.email ? <a href={`mailto:${lead.email}`} className="text-vermilion hover:underline">{lead.email}</a> : '—')}
+          />
           <Field label="District" value={lead.district} />
           <Field label="Niche" value={lead.niche} />
           <Field label="Category" value={lead.category} />

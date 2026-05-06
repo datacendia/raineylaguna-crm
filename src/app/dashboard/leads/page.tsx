@@ -4,6 +4,14 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { DISTRICTS, NICHES, STAGES, type Lead } from '@/lib/types'
 
+function whatsappLink(phone: string, name: string): string {
+  const digits = phone.replace(/\D/g, '')
+  const e164 = digits.startsWith('51') ? digits : `51${digits}`
+  const firstName = name.trim().split(/\s+/)[0] ?? ''
+  const text = encodeURIComponent(`Hola ${firstName}, te escribo de Rainey Laguna.`)
+  return `https://wa.me/${e164}?text=${text}`
+}
+
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
@@ -110,13 +118,14 @@ export default function LeadsPage() {
               <th className="text-left p-3">Website</th>
               <th className="text-left p-3">Evaluation</th>
               <th className="text-left p-3">Strategic Action</th>
+              <th className="text-left p-3 w-10">Chat</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className="p-6 text-gray-500">Loading…</td></tr>
+              <tr><td colSpan={9} className="p-6 text-gray-500">Loading…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={8} className="p-6 text-gray-500">No leads match these filters.</td></tr>
+              <tr><td colSpan={9} className="p-6 text-gray-500">No leads match these filters.</td></tr>
             ) : filtered.map((l) => (
               <tr key={l.id} className="border-b hover:bg-gray-50">
                 <td className="p-3"><input type="checkbox" checked={selected.has(l.id)} onChange={() => toggleOne(l.id)} /></td>
@@ -129,6 +138,22 @@ export default function LeadsPage() {
                 <td className="p-3 text-sm text-gray-600">{l.website_status ?? '—'}</td>
                 <td className="p-3 text-sm text-gray-600">{l.evaluation ?? '—'}</td>
                 <td className="p-3 text-sm text-gray-600">{l.strategic_action ?? '—'}</td>
+                <td className="p-3 text-sm" onClick={(e) => e.stopPropagation()}>
+                  {l.phone ? (
+                    <a
+                      href={whatsappLink(l.phone, l.name)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-green-600 hover:text-green-800"
+                      title={`WhatsApp ${l.phone}`}
+                      aria-label="Open WhatsApp"
+                    >
+                      💬
+                    </a>
+                  ) : (
+                    <span className="text-gray-300">—</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

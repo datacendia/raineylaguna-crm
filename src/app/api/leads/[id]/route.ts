@@ -36,7 +36,7 @@ export async function PATCH(
   const { id } = await params
   try {
     const body = await request.json()
-    const allowed = ['name', 'website_url', 'pipeline_stage', 'notes', 'evaluation', 'strategic_action']
+    const allowed = ['name', 'email', 'phone', 'website_url', 'pipeline_stage', 'notes', 'evaluation', 'strategic_action']
     const fields: string[] = []
     const values: any[] = []
     let idx = 1

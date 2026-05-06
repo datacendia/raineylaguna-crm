@@ -1,6 +1,9 @@
 export type Lead = {
   id: string
   name: string
+  email: string | null
+  phone: string | null
+  source: string | null
   district: string
   niche: string
   category: string | null
