@@ -31,6 +31,19 @@ export type OutreachEvent = {
   updated_at: string
 }
 
+export type OutreachDraft = {
+  id: string
+  lead_id: string
+  channel: 'WhatsApp' | 'Email' | 'Instagram DM' | 'LinkedIn'
+  body: string
+  model: string | null
+  prompt_version: string | null
+  status: 'pending' | 'sent' | 'discarded'
+  generated_at: string
+  acted_at: string | null
+  acted_by: string | null
+}
+
 export type VideoAudit = {
   id: string
   lead_id: string

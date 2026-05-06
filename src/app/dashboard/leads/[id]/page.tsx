@@ -3,10 +3,20 @@
 import { useEffect, useState, use } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { STAGES, CHANNELS, type Lead, type OutreachEvent, type VideoAudit } from '@/lib/types'
+import { STAGES, CHANNELS, type Lead, type OutreachEvent, type OutreachDraft, type VideoAudit } from '@/lib/types'
 import ScriptPanel from '@/components/ScriptPanel'
 
 type LeadResponse = { lead: Lead; outreach: OutreachEvent[]; audits: VideoAudit[] }
+
+/**
+ * wa.me deep link with a custom prefilled body. Strips non-digits and adds 51
+ * country code if missing.
+ */
+function whatsappLinkWithBody(phone: string, body: string): string {
+  const digits = phone.replace(/\D/g, '')
+  const e164 = digits.startsWith('51') ? digits : `51${digits}`
+  return `https://wa.me/${e164}?text=${encodeURIComponent(body)}`
+}
 
 /**
  * Build a wa.me deep link from a Peruvian phone number. Strips non-digits,
@@ -29,14 +39,75 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const [form, setForm] = useState<Partial<Lead>>({})
   const [outreachForm, setOutreachForm] = useState({ channel: 'Email', notes: '' })
   const [auditForm, setAuditForm] = useState({ loom_url: '' })
+  const [draft, setDraft] = useState<OutreachDraft | null>(null)
+  const [draftBody, setDraftBody] = useState<string>('')
+  const [generating, setGenerating] = useState(false)
+  const [draftError, setDraftError] = useState<string | null>(null)
+
+  const loadDraft = () => {
+    fetch(`/api/leads/${id}/draft-outreach`)
+      .then((r) => r.json())
+      .then((d: OutreachDraft | null) => {
+        setDraft(d)
+        setDraftBody(d?.body ?? '')
+      })
+      .catch(() => {})
+  }
 
   const load = () => {
     fetch(`/api/leads/${id}`).then((r) => r.json()).then((d) => {
       setData(d)
       setForm(d.lead)
     })
+    loadDraft()
   }
   useEffect(load, [id])
+
+  const generateDraft = async () => {
+    setGenerating(true)
+    setDraftError(null)
+    try {
+      const res = await fetch(`/api/leads/${id}/draft-outreach`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Generation failed')
+      setDraft(json)
+      setDraftBody(json.body)
+    } catch (e) {
+      setDraftError(e instanceof Error ? e.message : 'Generation failed')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const updateDraft = async (status: 'sent' | 'discarded' | 'pending', bodyOverride?: string) => {
+    if (!draft) return
+    const payload: Record<string, unknown> = { draft_id: draft.id, status }
+    if (typeof bodyOverride === 'string') payload.body = bodyOverride
+    await fetch(`/api/leads/${id}/draft-outreach`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    loadDraft()
+  }
+
+  const sendDraftViaWhatsApp = async () => {
+    if (!draft || !data?.lead.phone) return
+    // Persist any in-place edits before opening the WhatsApp deep link.
+    if (draftBody !== draft.body) {
+      await updateDraft('sent', draftBody)
+    } else {
+      await updateDraft('sent')
+    }
+    // Also log a corresponding outreach event so the dashboard reflects it.
+    await fetch('/api/outreach', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lead_id: id, channel: 'WhatsApp', notes: '[AI draft] ' + draftBody.slice(0, 200) }),
+    })
+    load()
+    window.open(whatsappLinkWithBody(data.lead.phone, draftBody), '_blank', 'noopener')
+  }
 
   const save = async () => {
     await fetch(`/api/leads/${id}`, {
@@ -196,6 +267,65 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
 
       <div className="mb-6">
         <ScriptPanel lead={lead} onLogged={load} />
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-6 mb-6 border-l-4 border-l-vermilion">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-xl font-bold">AI WhatsApp Draft</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Personalized opener generated from this lead's data. Review, edit, then send.
+            </p>
+          </div>
+          <button
+            onClick={generateDraft}
+            disabled={generating}
+            className="px-3 py-1.5 border rounded text-sm hover:bg-gray-50 disabled:opacity-50"
+            title={draft ? 'Generate a new draft (replaces the current one)' : 'Generate a personalized opener'}
+          >
+            {generating ? 'Generating…' : draft ? '↻ Regenerate' : '✨ Generate draft'}
+          </button>
+        </div>
+
+        {draftError && (
+          <div className="mb-3 px-3 py-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded">
+            {draftError}
+          </div>
+        )}
+
+        {!draft && !generating && !draftError && (
+          <p className="text-sm text-gray-400 italic">No draft yet. Click "Generate draft" to create one.</p>
+        )}
+
+        {draft && (
+          <>
+            <textarea
+              value={draftBody}
+              onChange={(e) => setDraftBody(e.target.value)}
+              className="w-full border rounded p-3 text-sm font-sans whitespace-pre-wrap h-48"
+              spellCheck
+            />
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              <button
+                onClick={sendDraftViaWhatsApp}
+                disabled={!lead.phone}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                title={lead.phone ? 'Open WhatsApp with this body prefilled' : 'No phone on this lead'}
+              >
+                <span aria-hidden>💬</span> Send via WhatsApp
+              </button>
+              <button
+                onClick={() => updateDraft('discarded')}
+                className="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50"
+              >
+                Discard
+              </button>
+              <span className="ml-auto text-xs text-gray-400 font-mono">
+                {draft.status} · {draft.model ?? 'unknown'} · {new Date(draft.generated_at).toLocaleString()}
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
