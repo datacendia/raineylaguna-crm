@@ -85,7 +85,21 @@ CREATE TABLE crm_video_audits (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Admin users (multi-user auth)
+CREATE TABLE admin_users (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email VARCHAR(255) NOT NULL UNIQUE,
+  name VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  role VARCHAR(50) NOT NULL DEFAULT 'admin',
+  last_login_at TIMESTAMP WITH TIME ZONE,
+  disabled_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Indexes for performance
+CREATE INDEX idx_admin_users_email ON admin_users(email);
 CREATE INDEX idx_crm_leads_district ON crm_leads(district);
 CREATE INDEX idx_crm_leads_niche ON crm_leads(niche);
 CREATE INDEX idx_crm_leads_email ON crm_leads(email);
@@ -116,4 +130,7 @@ CREATE TRIGGER update_crm_outreach_events_updated_at BEFORE UPDATE ON crm_outrea
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_crm_video_audits_updated_at BEFORE UPDATE ON crm_video_audits
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_admin_users_updated_at BEFORE UPDATE ON admin_users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

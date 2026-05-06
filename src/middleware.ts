@@ -4,18 +4,18 @@ import { verifySession } from '@/lib/auth'
 
 export async function middleware(request: NextRequest) {
   const token = request.cookies.get('crm_auth')?.value
-  const isAuth = await verifySession(token)
+  const session = await verifySession(token)
   const path = request.nextUrl.pathname
   const isLoginPage = path === '/login'
   const isApi = path.startsWith('/api/')
   const isAuthApi = path.startsWith('/api/auth/')
 
-  if (!isAuth && !isLoginPage && !isAuthApi) {
+  if (!session && !isLoginPage && !isAuthApi) {
     if (isApi) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (isAuth && isLoginPage) {
+  if (session && isLoginPage) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
