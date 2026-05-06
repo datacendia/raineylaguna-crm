@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "seed": "tsx scripts/seed.ts",
-    "hash": "tsx scripts/hash-password.ts",
+    "user:create": "tsx scripts/user-create.ts",
     "worker": "tsx scripts/outreach-worker.ts",
     "migrate": "tsx scripts/migrate.ts",
     "draft-outreach-cron": "tsx scripts/draft-outreach-cron.ts"

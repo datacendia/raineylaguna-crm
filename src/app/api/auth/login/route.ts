@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyPassword, signSession } from '@/lib/auth'
+import { signSession } from '@/lib/auth'
+import { verifyUserPassword } from '@/lib/users'
 
 export async function POST(request: NextRequest) {
-  const { password } = await request.json()
+  const { email, password } = await request.json()
 
-  if (await verifyPassword(password)) {
-    const token = await signSession()
+  if (!email || !password) {
+    return NextResponse.json({ success: false, error: 'Email and password required' }, { status: 400 })
+  }
+
+  const user = await verifyUserPassword(email, password)
+
+  if (user) {
+    const token = await signSession({ uid: user.id, email: user.email, role: user.role })
     const response = NextResponse.json({ success: true })
     response.cookies.set('crm_auth', token, {
       httpOnly: true,

@@ -1,28 +1,27 @@
-import bcrypt from 'bcryptjs'
 import { SignJWT, jwtVerify } from 'jose'
 
 const secret = () => new TextEncoder().encode(process.env.CRM_COOKIE_SECRET ?? '')
 
-export async function verifyPassword(password: string): Promise<boolean> {
-  const hash = process.env.CRM_PASSWORD_HASH
-  if (!hash) return false
-  return bcrypt.compare(password, hash)
+export interface SessionPayload {
+  uid: string
+  email: string
+  role: string
 }
 
-export async function signSession(): Promise<string> {
-  return new SignJWT({ admin: true })
+export async function signSession(payload: SessionPayload): Promise<string> {
+  return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('24h')
     .sign(secret())
 }
 
-export async function verifySession(token: string | undefined): Promise<boolean> {
-  if (!token) return false
+export async function verifySession(token: string | undefined): Promise<SessionPayload | null> {
+  if (!token) return null
   try {
-    await jwtVerify(token, secret())
-    return true
+    const { payload } = await jwtVerify(token, secret())
+    return payload as unknown as SessionPayload
   } catch {
-    return false
+    return null
   }
 }
