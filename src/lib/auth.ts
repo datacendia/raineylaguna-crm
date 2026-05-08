@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose'
+import { serverEnv } from './env'
 
-const secret = () => new TextEncoder().encode(process.env.CRM_COOKIE_SECRET ?? '')
+const secret = () => new TextEncoder().encode(serverEnv.CRM_COOKIE_SECRET ?? '')
 
 export interface SessionPayload {
   uid: string

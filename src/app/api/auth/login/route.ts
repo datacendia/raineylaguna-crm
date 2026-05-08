@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({ success: true })
     response.cookies.set('crm_auth', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: serverEnv.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: 60 * 60 * 24,
       path: '/',
