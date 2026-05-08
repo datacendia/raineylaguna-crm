@@ -35,9 +35,14 @@ export async function register(): Promise<void> {
   }
 }
 
-// Note: onRequestError() can also be exported here to forward Next's
-// unhandled-error hook into Sentry.captureRequestError. We deferred it
-// because the Sentry 10.x captureRequestError signature collides with
-// Next 16's `Request` type under strict TS. The default Sentry global
-// error handlers still capture every unhandled exception inside route
-// handlers, so we lose nothing by omitting this hook.
+/**
+ * Surface uncaught request errors to Sentry. Next 15+ calls this for every
+ * unhandled error in a route handler / middleware.
+ *
+ * Re-exports Sentry.captureRequestError directly: both functions share the
+ * Next-defined signature, so there's no manual type bridge to drift under a
+ * SDK upgrade. (The CRM PR #7 typecheck originally tripped because we tried
+ * to hand-write the wrapper with a `Request` argument; the re-export side-
+ * steps the issue entirely.)
+ */
+export { captureRequestError as onRequestError } from '@sentry/nextjs'
