@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { signSession } from '@/lib/auth'
 import { verifyUserPassword } from '@/lib/users'
 import { createRateLimiter, ipFromHeaders } from '@/lib/rate-limit'
+import { serverEnv } from '@/lib/env'
 
 // 5 attempts / IP / minute. See src/lib/rate-limit.ts.
 const loginLimiter = createRateLimiter({ windowMs: 60_000, max: 5 })
