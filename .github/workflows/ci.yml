@@ -1,0 +1,73 @@
+# CI for raineylaguna-crm
+#
+# Per rainey-stack/CONVENTIONS.md §13.5 (Day 1 AM):
+#   "GitHub Actions: typecheck + lint + build on PR" for every Next.js repo.
+#
+# This workflow gates pull requests with four checks:
+#   1. lint      — `next lint` against ESLint 10 + eslint-config-next 16
+#   2. typecheck — `tsc --noEmit` against TypeScript 5.6, strict mode
+#   3. test      — `vitest run` (unit tests, including priority-score)
+#   4. build     — full production `next build`
+#
+# Build runs without runtime env vars set. The CRM reads DATABASE_URL,
+# REDIS_URL, CRM_COOKIE_SECRET, and CRM_LEAD_INTAKE_SECRET at request time,
+# not at build time, so this is safe. If you add a feature that reads env
+# at module top-level, either lazy-evaluate it or add a placeholder under
+# the `env:` block in the build step.
+#
+# Failing the workflow blocks merge. Add a branch protection rule on `main`
+# that requires this workflow to pass before merge.
+
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel in-progress runs on the same branch when a newer commit lands.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: lint · typecheck · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint (next lint)
+        run: npm run lint
+
+      - name: Typecheck (tsc --noEmit)
+        run: npm run typecheck
+
+      - name: Test (vitest run)
+        run: npm test
+
+      - name: Build (next build)
+        run: npm run build
+        env:
+          # Build-time placeholders. The CRM does no DB/Redis I/O during
+          # `next build`; these exist so any zod env loaders that *do*
+          # evaluate at module top-level don't trip CI. Real values are
+          # injected at runtime by Railway.
+          SKIP_ENV_VALIDATION: '1'
+          DATABASE_URL: 'postgresql://placeholder:placeholder@localhost:5432/placeholder'
+          REDIS_URL: 'redis://localhost:6379'
+          CRM_COOKIE_SECRET: 'ci-placeholder-cookie-secret-32-chars-min'
+          CRM_LEAD_INTAKE_SECRET: 'ci-placeholder-lead-intake-secret'

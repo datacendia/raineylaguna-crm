@@ -9,25 +9,31 @@ Lead management system for Rainey Laguna Studios. Manages 1,000+ SMB leads acros
 npm install
 ```
 
-2. Generate a password hash:
-```bash
-npm run hash -- "your-secure-password"
+2. Set `.env.local`:
 ```
-Copy the printed `CRM_PASSWORD_HASH=...` line into `.env.local`.
-
-3. Set the rest of `.env.local`:
-```
-CRM_PASSWORD_HASH=<from step 2>
 CRM_COOKIE_SECRET=<32+ random characters>
+CRM_LEAD_INTAKE_SECRET=<shared with raineylaguna-next>
 DATABASE_URL=postgresql://user:password@localhost:5432/raineylaguna
 REDIS_URL=redis://localhost:6379
 ```
 
-4. Run database schema:
+> **Note.** Authentication moved from a single `CRM_PASSWORD_HASH` env var
+> to a per-user model backed by the `users` table. Use `npm run user:create`
+> (step 4) to provision admins; do not set `CRM_PASSWORD_HASH` — it is no
+> longer read.
+
+3. Run database migrations:
 ```bash
-psql -U user -d raineylaguna -f database/crm-schema.sql
+npm run migrate
 ```
-(Or, against a Railway-managed Postgres after deploy, use `npm run migrate` — see `DEPLOY.md`.)
+This applies every file in `database/migrations/` against `DATABASE_URL`
+(idempotent). Against a Railway-managed Postgres after deploy, run the
+same command from a one-off shell — see `DEPLOY.md`.
+
+4. Create your first admin user:
+```bash
+npm run user:create -- you@example.com "Your Name" "your-secure-password"
+```
 
 5. Seed initial leads (~330 from the Lima report):
 ```bash
@@ -43,6 +49,17 @@ npm run dev
 ```bash
 npm run worker
 ```
+
+## Tests
+
+```bash
+npm run typecheck   # tsc --noEmit
+npm test            # vitest run
+npm run lint        # next lint
+```
+
+CI runs all four (lint, typecheck, test, build) on every PR via
+`.github/workflows/ci.yml`.
 
 > **Note for Railway deploys.** The `Procfile` `web` and `worker` lines do **not**
 > auto-spawn two processes on Railway — Railway ignores Procfile process types.
