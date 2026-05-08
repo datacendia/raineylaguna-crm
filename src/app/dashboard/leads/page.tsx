@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { DISTRICTS, NICHES, STAGES, type Lead } from '@/lib/types'
+import { DISTRICTS, NICHES, STAGES, type Lead, type PipelineStage } from '@/lib/types'
 import { computePriorityScore, bandColor } from '@/lib/priority-score'
 
 function whatsappLink(phone: string, name: string): string {
@@ -18,7 +18,7 @@ export default function LeadsPage() {
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({ district: 'all', niche: 'all', stage: 'all', search: '', includeSnoozed: false, sortBy: 'score' as 'score' | 'created' })
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [bulkStage, setBulkStage] = useState<string>('Contacted')
+  const [bulkStage, setBulkStage] = useState<PipelineStage>('Contacted')
   const [bulkBusy, setBulkBusy] = useState(false)
 
   useEffect(() => {
@@ -66,7 +66,7 @@ export default function LeadsPage() {
     })
     setBulkBusy(false)
     if (res.ok) {
-      setLeads((prev) => prev.map((l) => (selected.has(l.id) ? { ...l, pipeline_stage: bulkStage as any } : l)))
+      setLeads((prev) => prev.map((l) => (selected.has(l.id) ? { ...l, pipeline_stage: bulkStage } : l)))
       setSelected(new Set())
     }
   }
@@ -125,7 +125,7 @@ export default function LeadsPage() {
       {selected.size > 0 && (
         <div className="bg-iron text-bone p-3 rounded-lg mb-4 flex items-center gap-3">
           <span className="text-sm">{selected.size} selected</span>
-          <select value={bulkStage} onChange={(e) => setBulkStage(e.target.value)} className="text-iron p-1 rounded text-sm">
+          <select value={bulkStage} onChange={(e) => setBulkStage(e.target.value as PipelineStage)} className="text-iron p-1 rounded text-sm">
             {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           <button onClick={bulkUpdate} disabled={bulkBusy} className="bg-vermilion px-3 py-1 rounded text-sm">
