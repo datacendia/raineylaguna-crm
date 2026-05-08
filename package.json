@@ -14,7 +14,9 @@
     "draft-outreach-cron": "tsx scripts/draft-outreach-cron.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.52.0",
@@ -31,6 +33,7 @@
     "ioredis": "^5.10.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.1",
     "@types/node": "^20.16.11",
     "@types/pg": "^8.11.10",
     "@types/react": "^19.2.14",
