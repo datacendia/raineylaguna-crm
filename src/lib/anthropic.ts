@@ -27,11 +27,11 @@ export interface CompletionResult {
 }
 
 export async function complete(params: CompletionParams): Promise<CompletionResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = serverEnv.ANTHROPIC_API_KEY
   if (!apiKey) {
     throw new Error('ANTHROPIC_API_KEY is not set')
   }
-  const model = params.model ?? process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL
+  const model = params.model ?? serverEnv.ANTHROPIC_MODEL ?? DEFAULT_MODEL
 
   const res = await fetch(ENDPOINT, {
     method: 'POST',

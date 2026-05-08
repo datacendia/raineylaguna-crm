@@ -20,6 +20,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import pool from '@/lib/db'
+import { serverEnv } from '@/lib/env'
 
 export const runtime = 'nodejs'
 
@@ -31,7 +32,7 @@ function constantTimeEqual(a: string, b: string): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  const expected = process.env.CRM_LEAD_INTAKE_SECRET
+  const expected = serverEnv.CRM_LEAD_INTAKE_SECRET
   const provided = request.headers.get('X-Lead-Intake-Secret')
 
   if (!expected || expected === 'change_me_to_a_long_random_string') {

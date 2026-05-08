@@ -1,7 +1,8 @@
 import { Pool } from 'pg'
+import { serverEnv } from './env'
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: serverEnv.DATABASE_URL,
 })
 
 export default pool
