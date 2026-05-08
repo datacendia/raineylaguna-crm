@@ -13,7 +13,7 @@ export type Lead = {
   evaluation: string | null
   strategic_action: string | null
   potential: string | null
-  pipeline_stage: 'Lead' | 'Contacted' | 'Audited' | 'Proposal' | 'Closed'
+  pipeline_stage: PipelineStage
   notes: string | null
   next_action: string | null
   snoozed_until: string | null
@@ -73,5 +73,12 @@ export const NICHES = [
 ] as const
 
 export const STAGES = ['Lead', 'Contacted', 'Audited', 'Proposal', 'Closed'] as const
+
+/**
+ * Pipeline stage union derived from STAGES so the two stay in sync.
+ * Use this type anywhere a pipeline stage is passed around (form state,
+ * drag-and-drop handlers, API payloads) to avoid `string`-based casts.
+ */
+export type PipelineStage = (typeof STAGES)[number]
 
 export const CHANNELS = ['Email', 'Instagram DM', 'WhatsApp', 'LinkedIn'] as const

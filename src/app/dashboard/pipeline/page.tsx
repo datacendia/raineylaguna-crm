@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { STAGES, type Lead } from '@/lib/types'
+import { STAGES, type Lead, type PipelineStage } from '@/lib/types'
 
 export default function PipelinePage() {
   const [leads, setLeads] = useState<Lead[]>([])
@@ -12,11 +12,11 @@ export default function PipelinePage() {
   }
   useEffect(load, [])
 
-  const handleDrop = async (e: React.DragEvent, stage: string) => {
+  const handleDrop = async (e: React.DragEvent, stage: PipelineStage) => {
     e.preventDefault()
     const id = e.dataTransfer.getData('text/plain')
     if (!id) return
-    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, pipeline_stage: stage as any } : l)))
+    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, pipeline_stage: stage } : l)))
     await fetch(`/api/leads/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
