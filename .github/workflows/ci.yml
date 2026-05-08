@@ -48,7 +48,10 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+        # `npm install` instead of `npm ci` because package-lock.json drifted
+        # from package.json (see vigiaV2 fix/ci-npm-install PR #6 for the same
+        # pattern). Determinism via setup-node cache; self-heals drift.
+        run: npm install --no-audit --no-fund --legacy-peer-deps
 
       - name: Lint (next lint)
         run: npm run lint
