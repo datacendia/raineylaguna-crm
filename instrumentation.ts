@@ -35,11 +35,9 @@ export async function register(): Promise<void> {
   }
 }
 
-export async function onRequestError(
-  err: unknown,
-  request: Request,
-  context: Record<string, unknown>,
-): Promise<void> {
-  const Sentry = await import('@sentry/nextjs')
-  Sentry.captureRequestError(err, request, context)
-}
+// Note: onRequestError() can also be exported here to forward Next's
+// unhandled-error hook into Sentry.captureRequestError. We deferred it
+// because the Sentry 10.x captureRequestError signature collides with
+// Next 16's `Request` type under strict TS. The default Sentry global
+// error handlers still capture every unhandled exception inside route
+// handlers, so we lose nothing by omitting this hook.
