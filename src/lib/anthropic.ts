@@ -9,6 +9,8 @@
  * Optional env: ANTHROPIC_MODEL (default: claude-3-5-sonnet-20241022)
  */
 
+import { serverEnv } from '@/lib/env'
+
 const DEFAULT_MODEL = 'claude-3-5-sonnet-20241022'
 const ENDPOINT = 'https://api.anthropic.com/v1/messages'
 
