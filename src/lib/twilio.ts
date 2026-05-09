@@ -11,6 +11,8 @@
  * pull in the twilio npm package.
  */
 
+import { serverEnv } from './env'
+
 export interface TwilioConfig {
   accountSid: string
   authToken: string
@@ -25,15 +27,15 @@ export interface SendResult {
 }
 
 export function getTwilioConfig(): TwilioConfig | null {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID
-  const authToken = process.env.TWILIO_AUTH_TOKEN
-  const whatsappFrom = process.env.TWILIO_WHATSAPP_FROM
+  const accountSid = serverEnv.TWILIO_ACCOUNT_SID
+  const authToken = serverEnv.TWILIO_AUTH_TOKEN
+  const whatsappFrom = serverEnv.TWILIO_WHATSAPP_FROM
   if (!accountSid || !authToken || !whatsappFrom) return null
   return {
     accountSid,
     authToken,
     whatsappFrom,
-    templateSid: process.env.TWILIO_TEMPLATE_SID,
+    templateSid: serverEnv.TWILIO_TEMPLATE_SID,
   }
 }
 

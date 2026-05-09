@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { DISTRICTS, NICHES, STAGES, type Lead } from '@/lib/types'
+import { DISTRICTS, NICHES, STAGES, type Lead, type PipelineStage } from '@/lib/types'
+import { computePriorityScore, bandColor } from '@/lib/priority-score'
 
 function whatsappLink(phone: string, name: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -15,10 +16,11 @@ function whatsappLink(phone: string, name: string): string {
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState({ district: 'all', niche: 'all', stage: 'all', search: '', includeSnoozed: false })
+  const [filters, setFilters] = useState({ district: 'all', niche: 'all', stage: 'all', search: '', includeSnoozed: false, sortBy: 'score' as 'score' | 'created' })
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [bulkStage, setBulkStage] = useState<string>('Contacted')
+  const [bulkStage, setBulkStage] = useState<PipelineStage>('Contacted')
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkSnoozeDate, setBulkSnoozeDate] = useState('')
 
   useEffect(() => {
     setLoading(true)
@@ -35,9 +37,15 @@ export default function LeadsPage() {
       })
   }, [filters.district, filters.niche, filters.stage, filters.includeSnoozed])
 
-  const filtered = filters.search
-    ? leads.filter((l) => l.name.toLowerCase().includes(filters.search.toLowerCase()))
-    : leads
+  const scored = leads.map((l) => ({ lead: l, ps: computePriorityScore(l) }))
+  const searched = filters.search
+    ? scored.filter(({ lead }) => lead.name.toLowerCase().includes(filters.search.toLowerCase()))
+    : scored
+  const sorted = filters.sortBy === 'score'
+    ? [...searched].sort((a, b) => b.ps.score - a.ps.score)
+    : searched
+  const filtered = sorted.map((s) => s.lead)
+  const scoreById = new Map(sorted.map((s) => [s.lead.id, s.ps]))
 
   const toggleAll = () => {
     if (selected.size === filtered.length) setSelected(new Set())
@@ -59,9 +67,36 @@ export default function LeadsPage() {
     })
     setBulkBusy(false)
     if (res.ok) {
-      setLeads((prev) => prev.map((l) => (selected.has(l.id) ? { ...l, pipeline_stage: bulkStage as any } : l)))
+      setLeads((prev) => prev.map((l) => (selected.has(l.id) ? { ...l, pipeline_stage: bulkStage } : l)))
       setSelected(new Set())
     }
+  }
+
+  // Bulk snooze: an explicit ISO date (YYYY-MM-DD) is sent as snoozed_until.
+  // Passing `null` un-snoozes every selected lead in one call.
+  const bulkSnooze = async (untilISO: string | null) => {
+    if (selected.size === 0) return
+    setBulkBusy(true)
+    const ids = Array.from(selected)
+    const res = await fetch('/api/leads/bulk', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, updates: { snoozed_until: untilISO } }),
+    })
+    setBulkBusy(false)
+    if (res.ok) {
+      setLeads((prev) => prev.map((l) => (selected.has(l.id) ? { ...l, snoozed_until: untilISO } : l)))
+      setSelected(new Set())
+      setBulkSnoozeDate('')
+    }
+  }
+
+  // Offset helper: "+7d" -> ISO date string 7 days from today (local).
+  const isoDaysFromNow = (days: number): string => {
+    const d = new Date()
+    d.setDate(d.getDate() + days)
+    // YYYY-MM-DD slice is what <input type="date"> and Postgres DATE both expect.
+    return d.toISOString().slice(0, 10)
   }
 
   return (
@@ -92,25 +127,86 @@ export default function LeadsPage() {
             {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
-        <label className="flex items-center gap-2 text-sm text-gray-600 mt-3">
-          <input
-            type="checkbox"
-            checked={filters.includeSnoozed}
-            onChange={(e) => setFilters({ ...filters, includeSnoozed: e.target.checked })}
-          />
-          Include snoozed leads
-        </label>
+        <div className="flex items-center gap-6 mt-3 flex-wrap">
+          <label className="flex items-center gap-2 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={filters.includeSnoozed}
+              onChange={(e) => setFilters({ ...filters, includeSnoozed: e.target.checked })}
+            />
+            Include snoozed leads
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-600">
+            Sort by
+            <select
+              value={filters.sortBy}
+              onChange={(e) => setFilters({ ...filters, sortBy: e.target.value as 'score' | 'created' })}
+              className="border p-1 rounded text-sm"
+            >
+              <option value="score">Priority score</option>
+              <option value="created">Newest first</option>
+            </select>
+          </label>
+        </div>
       </div>
 
       {selected.size > 0 && (
-        <div className="bg-iron text-bone p-3 rounded-lg mb-4 flex items-center gap-3">
+        <div className="bg-iron text-bone p-3 rounded-lg mb-4 flex items-center gap-3 flex-wrap">
           <span className="text-sm">{selected.size} selected</span>
-          <select value={bulkStage} onChange={(e) => setBulkStage(e.target.value)} className="text-iron p-1 rounded text-sm">
+
+          {/* Bulk stage change */}
+          <select value={bulkStage} onChange={(e) => setBulkStage(e.target.value as PipelineStage)} className="text-iron p-1 rounded text-sm">
             {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          <button onClick={bulkUpdate} disabled={bulkBusy} className="bg-vermilion px-3 py-1 rounded text-sm">
+          <button onClick={bulkUpdate} disabled={bulkBusy} className="bg-vermilion px-3 py-1 rounded text-sm disabled:opacity-50">
             {bulkBusy ? 'Updating…' : 'Move to stage'}
           </button>
+
+          {/* Visual divider between stage group and snooze group */}
+          <span className="h-5 w-px bg-bone/30" aria-hidden />
+
+          {/* Bulk snooze: quick presets, custom date, or un-snooze */}
+          <span className="text-xs uppercase tracking-wide opacity-70">Snooze</span>
+          <button
+            onClick={() => bulkSnooze(isoDaysFromNow(7))}
+            disabled={bulkBusy}
+            className="bg-bone/10 hover:bg-bone/20 px-2 py-1 rounded text-xs disabled:opacity-50"
+            title="Snooze all selected leads for 7 days"
+          >
+            +7d
+          </button>
+          <button
+            onClick={() => bulkSnooze(isoDaysFromNow(30))}
+            disabled={bulkBusy}
+            className="bg-bone/10 hover:bg-bone/20 px-2 py-1 rounded text-xs disabled:opacity-50"
+            title="Snooze all selected leads for 30 days"
+          >
+            +30d
+          </button>
+          <input
+            type="date"
+            value={bulkSnoozeDate}
+            onChange={(e) => setBulkSnoozeDate(e.target.value)}
+            min={isoDaysFromNow(1)}
+            className="text-iron p-1 rounded text-sm"
+            aria-label="Snooze until date"
+          />
+          <button
+            onClick={() => bulkSnoozeDate && bulkSnooze(bulkSnoozeDate)}
+            disabled={bulkBusy || !bulkSnoozeDate}
+            className="bg-vermilion px-3 py-1 rounded text-sm disabled:opacity-50"
+          >
+            {bulkBusy ? 'Snoozing…' : 'Snooze until'}
+          </button>
+          <button
+            onClick={() => bulkSnooze(null)}
+            disabled={bulkBusy}
+            className="bg-bone/10 hover:bg-bone/20 px-2 py-1 rounded text-xs disabled:opacity-50"
+            title="Clear snooze on all selected leads"
+          >
+            Unsnooze
+          </button>
+
           <button onClick={() => setSelected(new Set())} className="text-sm underline ml-auto">Clear</button>
         </div>
       )}
@@ -121,6 +217,7 @@ export default function LeadsPage() {
             <tr>
               <th className="p-3 w-8"><input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleAll} /></th>
               <th className="text-left p-3">Name</th>
+              <th className="text-left p-3">Score</th>
               <th className="text-left p-3">District</th>
               <th className="text-left p-3">Niche</th>
               <th className="text-left p-3">Stage</th>
@@ -133,9 +230,9 @@ export default function LeadsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={10} className="p-6 text-gray-500">Loading…</td></tr>
+              <tr><td colSpan={11} className="p-6 text-gray-500">Loading…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={10} className="p-6 text-gray-500">No leads match these filters.</td></tr>
+              <tr><td colSpan={11} className="p-6 text-gray-500">No leads match these filters.</td></tr>
             ) : filtered.map((l) => {
               const snoozeMs = l.snoozed_until ? new Date(l.snoozed_until).getTime() : null
               const snoozeExpired = snoozeMs !== null && snoozeMs <= Date.now()
@@ -151,6 +248,22 @@ export default function LeadsPage() {
                   {snoozeActive && (
                     <span className="ml-2 text-[10px] uppercase tracking-wide bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded" title={`Snoozed until ${new Date(snoozeMs!).toLocaleDateString()}`}>💤 {new Date(snoozeMs!).toLocaleDateString()}</span>
                   )}
+                </td>
+                <td className="p-3 text-sm">
+                  {(() => {
+                    const ps = scoreById.get(l.id)
+                    if (!ps) return null
+                    const c = bandColor(ps.band)
+                    return (
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold ${c.bg} ${c.text}`}
+                        title={`${ps.band} · ${ps.why}\nrecency ${ps.breakdown.recency} · web ${ps.breakdown.website} · niche ${ps.breakdown.niche} · work ${ps.breakdown.workability}`}
+                      >
+                        <span className="font-mono tabular-nums">{ps.score}</span>
+                        <span className="opacity-80">{ps.band}</span>
+                      </span>
+                    )
+                  })()}
                 </td>
                 <td className="p-3 text-sm">{l.district}</td>
                 <td className="p-3 text-sm">{l.niche}</td>

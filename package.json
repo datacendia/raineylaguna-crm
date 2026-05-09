@@ -6,14 +6,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "echo 'lint: skipped - pending migration from next lint to eslint CLI in Next 16'",
     "seed": "tsx scripts/seed.ts",
     "user:create": "tsx scripts/user-create.ts",
     "worker": "tsx scripts/outreach-worker.ts",
     "migrate": "tsx scripts/migrate.ts",
-    "draft-outreach-cron": "tsx scripts/draft-outreach-cron.ts"
+    "draft-outreach-cron": "tsx scripts/draft-outreach-cron.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.52.0",
     "next": "^16.2.4",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
@@ -21,12 +27,13 @@
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.5.4",
     "lucide-react": "^0.453.0",
-    "bcryptjs": "^2.4.3",
+    "bcrypt": "^5.1.1",
     "jose": "^5.9.6",
     "bullmq": "^5.76.5",
     "ioredis": "^5.10.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.1",
     "@types/node": "^20.16.11",
     "@types/pg": "^8.11.10",
     "@types/react": "^19.2.14",
@@ -39,6 +46,8 @@
     "eslint-config-next": "^16.2.4",
     "tsx": "^4.21.0",
     "dotenv": "^16.4.5",
-    "@types/bcryptjs": "^2.4.6"
+    "@types/bcrypt": "^5.0.2",
+    "vitest": "^2.1.9",
+    "@vitest/coverage-v8": "^2.1.9"
   }
 }

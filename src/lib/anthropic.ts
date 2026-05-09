@@ -9,6 +9,8 @@
  * Optional env: ANTHROPIC_MODEL (default: claude-3-5-sonnet-20241022)
  */
 
+import { serverEnv } from '@/lib/env'
+
 const DEFAULT_MODEL = 'claude-3-5-sonnet-20241022'
 const ENDPOINT = 'https://api.anthropic.com/v1/messages'
 
@@ -27,11 +29,11 @@ export interface CompletionResult {
 }
 
 export async function complete(params: CompletionParams): Promise<CompletionResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = serverEnv.ANTHROPIC_API_KEY
   if (!apiKey) {
     throw new Error('ANTHROPIC_API_KEY is not set')
   }
-  const model = params.model ?? process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL
+  const model = params.model ?? serverEnv.ANTHROPIC_MODEL ?? DEFAULT_MODEL
 
   const res = await fetch(ENDPOINT, {
     method: 'POST',
