@@ -225,6 +225,60 @@
 
 ---
 
+## PAID SERVICES — what's genuinely required
+
+> Test for inclusion here: *can this item ship at production quality
+> without the spend?* The CRM is staff-internal, so the surface area
+> for required spend is much smaller than Sereno.
+
+### Required for production (non-negotiable)
+
+- **Railway production tier (~US$ 5 – 20 / month).** Same shared
+  Railway account as vigia; the CRM's Postgres + Next app sits on
+  it. No new spend if vigia is already on a paid plan; the resource
+  envelope absorbs it.
+
+- **Shared services already paid via vigia:**
+  - **Twilio** for any WhatsApp outreach (STRATEGIC item 18). Same
+    account, per-message fees apply at the same rates documented in
+    `../vigia/ROADMAP.md`. Cold WhatsApp messages must use a Meta-
+    approved marketing template; otherwise Twilio rejects the send.
+  - **Resend** for email outreach. Same free / paid envelope as
+    vigia. CRM volume is typically lower than Sereno's (one
+    outreach per lead, not weekly briefs), so doesn't materially
+    move the bill.
+  - **Anthropic Claude API** for AI draft generation (existing
+    `outreach_drafts` queue) and for `priority-score` tuning. Same
+    per-token cost as vigia; typical monthly draws are a few
+    dollars at the current lead volume.
+
+**Floor cost:** **US$ 0 / month new spend** (all shared with vigia).
+
+### Strongly recommended
+
+- **A second WhatsApp Business sender for outreach (US$ 1 / mo).**
+  Mixing transactional Sereno briefs and cold CRM outreach on the
+  same Twilio sender risks Meta-side quality-rating penalties. A
+  second Twilio phone number isolates the risk.
+
+- **Lead enrichment service.** Optional at any scale. Tools like
+  Hunter.io (free 25 lookups / mo, US$ 49 / mo for 500) or
+  Apollo.io find emails for leads where you only have a domain.
+  **Not required** if you only chase leads who already gave you
+  their email via the audit form or contact form. Add only if you
+  start outbound prospecting from cold lists.
+
+### Wouldn't pay for
+
+- **HubSpot / Pipedrive / Salesforce.** This CRM exists for the
+  exact reason you would otherwise pay them.
+- **Calendly Pro.** Cal.com free tier handles the booked-audit
+  iCal feed (STRETCH item 21).
+- **Sentry paid tier.** Free tier (5K events / mo) is plenty for
+  staff-only traffic.
+
+---
+
 ## EXPLICITLY NOT DOING
 
 - **Public sign-ups.** This CRM is staff-only by design.
