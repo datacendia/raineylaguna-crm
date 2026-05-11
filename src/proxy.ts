@@ -2,7 +2,18 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { verifySession } from '@/lib/auth'
 
-export async function middleware(request: NextRequest) {
+/**
+ * Edge gate for CRM. Next 16 renamed the file convention from `middleware`
+ * to `proxy` (same Edge runtime, same `config.matcher` semantics) — see
+ * https://nextjs.org/docs/messages/middleware-to-proxy. The exported name
+ * was renamed accordingly.
+ *
+ * Responsibilities:
+ *   - Bounces unauthenticated requests on protected routes to /login.
+ *   - For protected API routes, returns 401 JSON rather than redirecting.
+ *   - Sends an authenticated user away from /login into /dashboard.
+ */
+export async function proxy(request: NextRequest) {
   const token = request.cookies.get('crm_auth')?.value
   const session = await verifySession(token)
   const path = request.nextUrl.pathname

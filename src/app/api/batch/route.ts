@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
-import { outreachQueue } from '@/lib/queue'
+import { getOutreachQueue } from '@/lib/queue'
 import { templatesFor, SCRIPT_TEMPLATES } from '@/lib/scripts'
 import type { Lead } from '@/lib/types'
 
@@ -26,6 +26,16 @@ export async function POST(request: NextRequest) {
     }
     const tpl = SCRIPT_TEMPLATES.find((t) => t.id === template_id)
     if (!tpl) return NextResponse.json({ error: 'Unknown template' }, { status: 400 })
+
+    // Queue is lazily constructed so the rest of the app boots even when
+    // Redis isn't configured. Surface a clear 503 here if so.
+    const outreachQueue = getOutreachQueue()
+    if (!outreachQueue) {
+      return NextResponse.json(
+        { error: 'Outreach queue unavailable: REDIS_URL is not configured.' },
+        { status: 503 },
+      )
+    }
 
     const baseTime = start_at ? new Date(start_at).getTime() : Date.now()
     const { rows } = await pool.query<Lead>(
