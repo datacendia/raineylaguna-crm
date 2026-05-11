@@ -56,4 +56,38 @@ describe("CRM auth: session JWT round-trip", () => {
     const { verifySession } = await import("./auth");
     expect(await verifySession(token)).toBeNull();
   });
+
+  it("verifySession returns null when lastSeenAt is older than idle window (7d)", async () => {
+    const { signSession, verifySession, IDLE_LIFETIME_MS } = await import("./auth");
+    const eightDaysAgo = Date.now() - (IDLE_LIFETIME_MS + 60_000);
+    const token = await signSession({
+      uid: "u1",
+      email: "op@test",
+      role: "admin",
+      lastSeenAt: eightDaysAgo,
+    });
+    expect(await verifySession(token)).toBeNull();
+  });
+
+  it("verifySession accepts a recently-touched session within idle window", async () => {
+    const { signSession, verifySession } = await import("./auth");
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const token = await signSession({
+      uid: "u1",
+      email: "op@test",
+      role: "admin",
+      lastSeenAt: oneDayAgo,
+    });
+    const payload = await verifySession(token);
+    expect(payload).toMatchObject({ uid: "u1" });
+  });
+
+  it("touchSession only refreshes the cookie after TOUCH_INTERVAL_MS", async () => {
+    const { touchSession, TOUCH_INTERVAL_MS } = await import("./auth");
+    const fresh = { uid: "u1", email: "op@test", role: "admin", lastSeenAt: Date.now() };
+    expect(await touchSession(fresh)).toBeNull();
+
+    const stale = { ...fresh, lastSeenAt: Date.now() - (TOUCH_INTERVAL_MS + 1000) };
+    expect(await touchSession(stale)).not.toBeNull();
+  });
 });

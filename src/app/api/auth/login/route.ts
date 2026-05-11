@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { signSession } from '@/lib/auth'
+import { signSession, COOKIE_MAX_AGE_S } from '@/lib/auth'
 import { verifyUserPassword } from '@/lib/users'
 import { createRateLimiter, ipFromHeaders } from '@/lib/rate-limit'
 import { serverEnv } from '@/lib/env'
@@ -37,7 +37,9 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: serverEnv.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 60 * 60 * 24,
+      // Absolute 30-day lifetime; idle expiry (7d) and rolling refresh
+      // are enforced in `verifySession` / `touchSession` (src/lib/auth.ts).
+      maxAge: COOKIE_MAX_AGE_S,
       path: '/',
     })
     return response
