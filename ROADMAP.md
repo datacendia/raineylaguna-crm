@@ -9,6 +9,18 @@
 > **Status as of 2026-05-10:** ~70% complete. Pipeline + outreach +
 > AI-drafted email generation wired. Customer-facing surfaces, draft
 > review UI, and cross-system sync are the remaining gaps.
+>
+> **Reconciliation 2026-05-17:** Critical #6 (session timeout, 30d
+> rolling / 7d idle) shipped in `26367f5`. Critical #7 (`/login`
+> rate limit, 5/IP/min) shipped in `272aca8`. Critical #8 (`/api/health`
+> public liveness probe) shipped in `26367f5`. Critical #5 (TOTP 2FA)
+> remains **open** — the `26367f5` commit message claimed
+> 'items 5/6/7/8' but no `otplib`/TOTP code was added; verified by
+> grep + absence of dependency. Polish items: `52edde1` swapped
+> bcrypt→bcryptjs to clear high-severity tar advisories; `83e5e62`
+> migrated to ESLint 9 flat config. Effective completion ~80%,
+> remaining CRITICAL: #1 (drafts UI), #2 (bulk-import UI),
+> #3 (Sereno cross-ref), #4 (`/dashboard/morning`), #5 (TOTP).
 
 ---
 
@@ -53,7 +65,7 @@
   Renders as a vertical brief. Mirror the Sereno brief layout.
 - **Effort:** 1 day.
 
-### 5. Two-factor authentication on `/login`
+### 5. Two-factor authentication on `/login` ⚠️ still open — commit `26367f5` referenced this number but only shipped #6 + #8; no `otplib` or TOTP code present
 - **Why:** `bcryptjs` is good but no TOTP. A leaked password is a
   full compromise. Adding TOTP eliminates the most common attack.
 - **How:** `otplib` + a `crm_users.totp_secret` column. Setup flow at
@@ -61,7 +73,7 @@
   field after password.
 - **Effort:** 4 hours.
 
-### 6. Session timeout
+### ~~6. Session timeout~~ ✅ shipped (`26367f5`: 30d rolling / 7d idle / 1h touch interval)
 - **Why:** Sessions never expire. A stolen laptop is a permanent
   compromise.
 - **How:** Set `crm_sessions.expires_at` to 30 days rolling, 7 days
@@ -69,7 +81,7 @@
   on activity.
 - **Effort:** 2 hours.
 
-### 7. `/login` rate limit
+### ~~7. `/login` rate limit~~ ✅ shipped (`272aca8`: 5/min/IP via `src/lib/rate-limit.ts`)
 - **Why:** No per-IP rate limit means brute-force is theoretically
   feasible.
 - **How:** Use a small in-memory + Postgres-backed rate limiter (no
@@ -77,7 +89,7 @@
   on repeated failures.
 - **Effort:** 1 hour.
 
-### 8. `/api/health` deep check
+### ~~8. `/api/health` deep check~~ ✅ shipped (`26367f5`: DB `SELECT 1` + required-env presence; 200/503; `no-store` + `noindex`)
 - **Why:** Same as the vigia roadmap. Default Railway liveness is
   HTTP 200; real health checks Postgres + Twilio + Resend.
 - **How:** `GET /api/health` returns JSON `{ db, twilio, resend, ok }`.
