@@ -94,6 +94,8 @@ CREATE TABLE admin_users (
   role VARCHAR(50) NOT NULL DEFAULT 'admin',
   last_login_at TIMESTAMP WITH TIME ZONE,
   disabled_at TIMESTAMP WITH TIME ZONE,
+  totp_secret TEXT,
+  totp_enrolled_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

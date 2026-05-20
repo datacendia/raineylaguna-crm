@@ -25,6 +25,7 @@ export default function DashboardLayout({
           <Link href="/dashboard/outreach" className="block hover:text-vermilion">Outreach</Link>
           <Link href="/dashboard/video-audits" className="block hover:text-vermilion">Video Audits</Link>
           <Link href="/dashboard/batch" className="block hover:text-vermilion">Batch Outreach</Link>
+          <Link href="/dashboard/security" className="block hover:text-vermilion">Security</Link>
         </nav>
         <button onClick={logout} className="text-left text-sm text-gray-400 hover:text-vermilion">
           Logout
