@@ -23,6 +23,7 @@
 
 import { NextResponse } from 'next/server'
 import pool from '@/lib/db'
+import { serverEnv } from '@/lib/env'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -59,7 +60,7 @@ export async function GET() {
     ok: allOk,
     uptime_s: Math.round((Date.now() - STARTED_AT) / 1000),
     checks: { db, env },
-    version: process.env.NEXT_PUBLIC_GIT_SHA ?? 'unknown',
+    version: serverEnv.NEXT_PUBLIC_GIT_SHA ?? 'unknown',
     timestamp: new Date().toISOString(),
   }
 

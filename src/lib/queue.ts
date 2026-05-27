@@ -44,7 +44,7 @@ export function getRedisConnection(): Redis | null {
   if (_connection) return _connection
   const url =
     serverEnv.REDIS_URL ??
-    (process.env.NODE_ENV !== 'production' ? 'redis://localhost:6379' : null)
+    (serverEnv.NODE_ENV !== 'production' ? 'redis://localhost:6379' : null)
   if (!url) return null
   _connection = new IORedis(url, {
     maxRetriesPerRequest: null,
