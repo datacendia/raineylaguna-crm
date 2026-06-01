@@ -15,9 +15,13 @@
  *
  * Usage:
  *   $env:DATABASE_URL='...'; $env:GOOGLE_PAGESPEED_API_KEY='...'
- *   npx tsx scripts/audit-sites.ts --dry-run --limit 20
+ *   npx tsx scripts/audit-sites.ts --dry-run --limit 20 --with-website
  *   npx tsx scripts/audit-sites.ts --limit 200 --concurrency 5
  *   npx tsx scripts/audit-sites.ts --force --district Miraflores
+ *
+ * --with-website restricts to leads that actually have a website_url (the
+ * richest audits, and your most pitchable prospects); without it, no-site
+ * leads are included and score 0 instantly.
  */
 import { Pool } from 'pg'
 import { config } from 'dotenv'
@@ -42,6 +46,7 @@ const concIdx = args.indexOf('--concurrency')
 const CONCURRENCY = concIdx >= 0 ? Math.max(1, parseInt(args[concIdx + 1], 10)) : 5
 const distIdx = args.indexOf('--district')
 const DISTRICT = distIdx >= 0 ? args[distIdx + 1] : null
+const WITH_SITE = args.includes('--with-website')
 
 const pool = new Pool({ connectionString: DATABASE_URL })
 
@@ -79,6 +84,7 @@ async function main() {
     params.push(DISTRICT)
     where.push(`district = $${params.length}`)
   }
+  if (WITH_SITE) where.push("website_url IS NOT NULL AND website_url <> ''")
   const limitSql = LIMIT ? `LIMIT ${LIMIT}` : ''
   const { rows } = await pool.query<Row>(
     `SELECT id, name, website_url FROM crm_leads

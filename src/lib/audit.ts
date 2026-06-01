@@ -204,9 +204,14 @@ export function computeHealth(signals: AuditSignals): AuditFindings {
     .filter((f) => f.severity !== 'low')
     .slice(0, 3)
     .map((f) => f.label)
-  const summary = `Health ${clamp(Math.round(score), 0, 100)}/100${
-    top.length ? ` — ${top.join(', ')}` : ' — solid web presence'
-  }`
+  // Without Lighthouse data the score reflects on-page heuristics only, so be
+  // explicit rather than implying a confident "solid web presence".
+  const detail = top.length
+    ? ` — ${top.join(', ')}`
+    : lh
+      ? ' — solid web presence'
+      : ' — heuristics only (enable PageSpeed for performance/SEO)'
+  const summary = `Health ${clamp(Math.round(score), 0, 100)}/100${detail}`
 
   return findings(score, summary)
 }

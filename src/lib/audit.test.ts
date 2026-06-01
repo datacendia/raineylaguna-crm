@@ -93,6 +93,16 @@ describe('computeHealth', () => {
     const r = computeHealth(baseSignals())
     expect(r.summary).toMatch(/Health \d+\/100/)
   })
+
+  it('labels the result heuristics-only when PageSpeed data is absent', () => {
+    const r = computeHealth(baseSignals({ lighthouse: noScores() }))
+    expect(r.summary).toMatch(/heuristics only/i)
+  })
+
+  it('keeps "solid web presence" only when Lighthouse data is present', () => {
+    const r = computeHealth(baseSignals())
+    expect(r.summary).toMatch(/solid web presence/i)
+  })
 })
 
 describe('analyzeHtml', () => {
