@@ -20,7 +20,7 @@ export async function POST(
     }
     const findings = await auditWebsite({
       websiteUrl: res.rows[0].website_url,
-      apiKey: serverEnv.GOOGLE_PAGESPEED_API_KEY,
+      apiKey: serverEnv.GOOGLE_PAGESPEED_API_KEY ?? serverEnv.GOOGLE_PLACES_API_KEY,
     })
     const updated = await pool.query(
       `UPDATE crm_leads
