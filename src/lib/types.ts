@@ -13,6 +13,7 @@ export type Lead = {
   linkedin_url: string | null
   tiktok_url: string | null
   google_place_id: string | null
+  address: string | null
   website_url: string | null
   website_status: string | null
   evaluation: string | null

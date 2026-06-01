@@ -19,8 +19,8 @@ function whatsappLink(phone: string, name: string): string {
 const PAGE_SIZE = 100
 
 type SortKey =
-  | 'name' | 'score' | 'district' | 'niche' | 'stage' | 'next_action'
-  | 'website' | 'evaluation' | 'strategic_action' | 'social' | 'chat'
+  | 'name' | 'score' | 'district' | 'address' | 'niche' | 'stage' | 'next_action'
+  | 'website' | 'evaluation' | 'strategic_action' | 'email' | 'phone' | 'social' | 'chat'
 
 // Columns whose first click should sort high-to-low (most relevant first).
 const NUMERIC_KEYS = new Set<SortKey>(['score', 'social', 'chat'])
@@ -150,11 +150,14 @@ export default function LeadsPage() {
       case 'stage': return STAGES.indexOf(l.pipeline_stage)
       case 'name': return l.name.toLowerCase()
       case 'district': return (l.district ?? '').toLowerCase()
+      case 'address': return (l.address ?? '').toLowerCase()
       case 'niche': return (l.niche ?? '').toLowerCase()
       case 'next_action': return (l.next_action ?? '').toLowerCase()
       case 'website': return (l.website_status ?? '').toLowerCase()
       case 'evaluation': return (l.evaluation ?? '').toLowerCase()
       case 'strategic_action': return (l.strategic_action ?? '').toLowerCase()
+      case 'email': return (l.email ?? '').toLowerCase()
+      case 'phone': return (l.phone ?? '').toLowerCase()
       default: return 0
     }
   }
@@ -370,21 +373,24 @@ export default function LeadsPage() {
               <SortHeader label="Name" sortKey="name" sort={sort} onSort={toggleSort} />
               <SortHeader label="Score" sortKey="score" sort={sort} onSort={toggleSort} />
               <SortHeader label="District" sortKey="district" sort={sort} onSort={toggleSort} />
+              <SortHeader label="Address" sortKey="address" sort={sort} onSort={toggleSort} />
               <SortHeader label="Niche" sortKey="niche" sort={sort} onSort={toggleSort} />
               <SortHeader label="Stage" sortKey="stage" sort={sort} onSort={toggleSort} />
               <SortHeader label="Next Action" sortKey="next_action" sort={sort} onSort={toggleSort} />
               <SortHeader label="Website" sortKey="website" sort={sort} onSort={toggleSort} />
               <SortHeader label="Evaluation" sortKey="evaluation" sort={sort} onSort={toggleSort} />
               <SortHeader label="Strategic Action" sortKey="strategic_action" sort={sort} onSort={toggleSort} />
+              <SortHeader label="Email" sortKey="email" sort={sort} onSort={toggleSort} />
+              <SortHeader label="Phone" sortKey="phone" sort={sort} onSort={toggleSort} />
               <SortHeader label="Social" sortKey="social" sort={sort} onSort={toggleSort} />
               <SortHeader label="Chat" sortKey="chat" sort={sort} onSort={toggleSort} className="w-10" />
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={12} className="p-6 text-gray-500">Loading…</td></tr>
+              <tr><td colSpan={15} className="p-6 text-gray-500">Loading…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={12} className="p-6 text-gray-500">No leads match these filters.</td></tr>
+              <tr><td colSpan={15} className="p-6 text-gray-500">No leads match these filters.</td></tr>
             ) : visible.map((l) => {
               const snoozeMs = l.snoozed_until ? new Date(l.snoozed_until).getTime() : null
               const snoozeExpired = snoozeMs !== null && snoozeMs <= Date.now()
@@ -418,6 +424,7 @@ export default function LeadsPage() {
                   })()}
                 </td>
                 <td className="p-3 text-sm">{l.district}</td>
+                <td className="p-3 text-sm text-gray-600 max-w-[16rem] truncate" title={l.address ?? ''}>{l.address ?? <span className="text-gray-300">—</span>}</td>
                 <td className="p-3 text-sm">{l.niche}</td>
                 <td className="p-3 text-sm">
                   <span className="px-2 py-1 rounded-full bg-gray-100 text-xs">{l.pipeline_stage}</span>
@@ -428,6 +435,20 @@ export default function LeadsPage() {
                 <td className="p-3 text-sm text-gray-600">{l.website_status ?? '—'}</td>
                 <td className="p-3 text-sm text-gray-600">{l.evaluation ?? '—'}</td>
                 <td className="p-3 text-sm text-gray-600">{l.strategic_action ?? '—'}</td>
+                <td className="p-3 text-sm max-w-[14rem] truncate" onClick={(e) => e.stopPropagation()}>
+                  {l.email ? (
+                    <a href={`mailto:${l.email}`} className="text-blue-600 hover:underline" title={l.email}>{l.email}</a>
+                  ) : (
+                    <span className="text-gray-300">—</span>
+                  )}
+                </td>
+                <td className="p-3 text-sm whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                  {l.phone ? (
+                    <a href={`tel:${l.phone.replace(/\s+/g, '')}`} className="text-gray-700 hover:underline" title={l.phone}>{l.phone}</a>
+                  ) : (
+                    <span className="text-gray-300">—</span>
+                  )}
+                </td>
                 <td className="p-3 text-sm" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-2">
                     {l.instagram_url && (

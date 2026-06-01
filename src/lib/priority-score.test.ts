@@ -27,6 +27,7 @@ const baseLead = (overrides: Partial<Lead> = {}): Lead => ({
   linkedin_url: null,
   tiktok_url: null,
   google_place_id: null,
+  address: null,
   website_url: null,
   website_status: null,
   evaluation: null,

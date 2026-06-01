@@ -73,6 +73,7 @@ const FIELD_MASK = [
   'places.internationalPhoneNumber',
   'places.websiteUri',
   'places.businessStatus',
+  'places.formattedAddress',
   'nextPageToken',
 ].join(',')
 
@@ -84,6 +85,7 @@ type Place = {
   internationalPhoneNumber?: string
   websiteUri?: string
   businessStatus?: string
+  formattedAddress?: string
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -161,16 +163,17 @@ async function main() {
           const phone = p.internationalPhoneNumber ?? null
           const website = p.websiteUri ?? null
           const status = website ? 'Has Website' : 'No Website'
+          const address = p.formattedAddress ?? null
           if (DRY_RUN) {
-            console.log(`  + ${district}/${niche}: ${name} (site:${website ?? '—'} phone:${phone ?? '—'})`)
+            console.log(`  + ${district}/${niche}: ${name} (site:${website ?? '—'} phone:${phone ?? '—'} addr:${address ?? '—'})`)
             inserted++
           } else {
             try {
               const r = await pool.query(
-                `INSERT INTO crm_leads (name, district, niche, phone, website_url, website_status, source, google_place_id)
-                 VALUES ($1,$2,$3,$4,$5,$6,'google_places',$7)
+                `INSERT INTO crm_leads (name, district, niche, phone, website_url, website_status, source, google_place_id, address)
+                 VALUES ($1,$2,$3,$4,$5,$6,'google_places',$7,$8)
                  ON CONFLICT (google_place_id) WHERE google_place_id IS NOT NULL DO NOTHING`,
-                [name, district, niche, phone, website, status, p.id],
+                [name, district, niche, phone, website, status, p.id, address],
               )
               if ((r.rowCount ?? 0) > 0) {
                 inserted++

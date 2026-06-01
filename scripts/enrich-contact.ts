@@ -39,6 +39,7 @@ if (!DATABASE_URL) {
 const args = process.argv.slice(2)
 const DRY_RUN = args.includes('--dry-run')
 const FORCE = args.includes('--force')
+const EMAIL_ONLY = args.includes('--email-only')
 const limitIdx = args.indexOf('--limit')
 const LIMIT = limitIdx >= 0 ? parseInt(args[limitIdx + 1], 10) : null
 const CONCURRENCY = 12
@@ -198,7 +199,9 @@ async function main() {
 
   const cond = FORCE
     ? ''
-    : 'AND email IS NULL AND facebook_url IS NULL AND linkedin_url IS NULL AND tiktok_url IS NULL'
+    : EMAIL_ONLY
+      ? "AND (email IS NULL OR email = '')"
+      : 'AND email IS NULL AND facebook_url IS NULL AND linkedin_url IS NULL AND tiktok_url IS NULL'
   const limitSql = LIMIT ? `LIMIT ${LIMIT}` : ''
   const { rows } = await pool.query<Lead>(
     `SELECT id, name, website_url FROM crm_leads
