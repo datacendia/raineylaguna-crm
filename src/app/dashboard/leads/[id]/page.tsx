@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { STAGES, CHANNELS, type Lead, type OutreachEvent, type OutreachDraft, type VideoAudit } from '@/lib/types'
 import ScriptPanel from '@/components/ScriptPanel'
+import { googleMapsUrl } from '@/lib/maps'
 
 type LeadResponse = { lead: Lead; outreach: OutreachEvent[]; audits: VideoAudit[] }
 
@@ -260,6 +261,15 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               <span aria-hidden>🌐</span> Website
             </a>
           )}
+          <a
+            href={googleMapsUrl(lead)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1 border rounded text-sm"
+            title="View on Google Maps"
+          >
+            <span aria-hidden>📍</span> Maps
+          </a>
           {!editing ? (
             <button onClick={() => setEditing(true)} className="px-3 py-1 border rounded">Edit</button>
           ) : (
@@ -289,6 +299,14 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               : (lead.email ? <a href={`mailto:${lead.email}`} className="text-vermilion hover:underline">{lead.email}</a> : '—')}
           />
           <Field label="District" value={lead.district} />
+          <Field
+            label="Address"
+            value={
+              <a href={googleMapsUrl(lead)} target="_blank" rel="noopener noreferrer" className="text-vermilion hover:underline">
+                {lead.address ?? 'View on Google Maps'}
+              </a>
+            }
+          />
           <Field label="Niche" value={lead.niche} />
           <Field label="Category" value={lead.category} />
           <Field

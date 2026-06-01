@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { DISTRICTS, NICHES, STAGES, type Lead, type PipelineStage } from '@/lib/types'
 import { computePriorityScore, bandColor } from '@/lib/priority-score'
+import { googleMapsUrl } from '@/lib/maps'
 
 function whatsappLink(phone: string, name: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -424,7 +425,11 @@ export default function LeadsPage() {
                   })()}
                 </td>
                 <td className="p-3 text-sm">{l.district}</td>
-                <td className="p-3 text-sm text-gray-600 max-w-[16rem] truncate" title={l.address ?? ''}>{l.address ?? <span className="text-gray-300">—</span>}</td>
+                <td className="p-3 text-sm text-gray-600 max-w-[16rem] truncate" onClick={(e) => e.stopPropagation()}>
+                  <a href={googleMapsUrl(l)} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" title={l.address ?? 'View on Google Maps'}>
+                    {l.address ?? <span className="text-gray-500 whitespace-nowrap">📍 Map</span>}
+                  </a>
+                </td>
                 <td className="p-3 text-sm">{l.niche}</td>
                 <td className="p-3 text-sm">
                   <span className="px-2 py-1 rounded-full bg-gray-100 text-xs">{l.pipeline_stage}</span>
