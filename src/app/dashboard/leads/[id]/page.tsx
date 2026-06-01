@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { STAGES, CHANNELS, type Lead, type OutreachEvent, type OutreachDraft, type VideoAudit } from '@/lib/types'
 import ScriptPanel from '@/components/ScriptPanel'
-import { googleMapsUrl } from '@/lib/maps'
+import { googleMapsUrl, googleMapsEmbedUrl } from '@/lib/maps'
 
 type LeadResponse = { lead: Lead; outreach: OutreachEvent[]; audits: VideoAudit[] }
 
@@ -441,6 +441,29 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             placeholder="Internal notes…"
           />
         </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h2 className="text-sm font-medium text-gray-700">Location</h2>
+          <a
+            href={googleMapsUrl(lead)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-vermilion hover:underline whitespace-nowrap"
+          >
+            Open in Google Maps ↗
+          </a>
+        </div>
+        {lead.address && <p className="text-sm text-gray-600 mb-3">{lead.address}</p>}
+        <iframe
+          title={`Map of ${lead.name}`}
+          src={googleMapsEmbedUrl(lead)}
+          className="w-full h-72 rounded-lg border"
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          allowFullScreen
+        />
       </div>
 
       <div className="mb-6">
