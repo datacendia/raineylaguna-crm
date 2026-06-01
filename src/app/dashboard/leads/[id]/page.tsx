@@ -205,6 +205,28 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               <span aria-hidden>✉️</span> Email
             </a>
           )}
+          {lead.instagram_url && (
+            <a
+              href={lead.instagram_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-pink-600 hover:bg-pink-700 text-white rounded text-sm"
+              title={lead.instagram_url}
+            >
+              <span aria-hidden>📷</span> Instagram
+            </a>
+          )}
+          {lead.website_url && (
+            <a
+              href={lead.website_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1 border rounded text-sm"
+              title={lead.website_url}
+            >
+              <span aria-hidden>🌐</span> Website
+            </a>
+          )}
           {!editing ? (
             <button onClick={() => setEditing(true)} className="px-3 py-1 border rounded">Edit</button>
           ) : (
@@ -236,7 +258,14 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
           <Field label="District" value={lead.district} />
           <Field label="Niche" value={lead.niche} />
           <Field label="Category" value={lead.category} />
-          <Field label="Instagram Active" value={lead.instagram_active ? 'Yes' : 'No'} />
+          <Field
+            label="Instagram"
+            value={editing
+              ? <input className="border p-1 rounded w-full" value={form.instagram_url ?? ''} onChange={(e) => setForm({ ...form, instagram_url: e.target.value })} placeholder="https://instagram.com/handle" />
+              : (lead.instagram_url
+                  ? <a href={lead.instagram_url} target="_blank" rel="noopener noreferrer" className="text-pink-600 hover:underline">{lead.instagram_url.replace(/^https?:\/\/(www\.)?instagram\.com\//, '@').replace(/\/$/, '')}</a>
+                  : '—')}
+          />
           <Field
             label="Website URL"
             value={editing ? <input className="border p-1 rounded w-full" value={form.website_url ?? ''} onChange={(e) => setForm({ ...form, website_url: e.target.value })} /> : (lead.website_url || '—')}

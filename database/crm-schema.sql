@@ -43,6 +43,8 @@ CREATE TABLE crm_leads (
   niche VARCHAR(100) NOT NULL,
   category VARCHAR(100),
   instagram_active BOOLEAN DEFAULT true,
+  instagram_url TEXT,
+  google_place_id TEXT,
   website_url VARCHAR(500),
   website_status VARCHAR(50),
   evaluation VARCHAR(100),

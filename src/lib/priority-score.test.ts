@@ -22,6 +22,8 @@ const baseLead = (overrides: Partial<Lead> = {}): Lead => ({
   niche: 'Professional Services',
   category: null,
   instagram_active: null,
+  instagram_url: null,
+  google_place_id: null,
   website_url: null,
   website_status: null,
   evaluation: null,

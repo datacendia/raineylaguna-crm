@@ -225,14 +225,15 @@ export default function LeadsPage() {
               <th className="text-left p-3">Website</th>
               <th className="text-left p-3">Evaluation</th>
               <th className="text-left p-3">Strategic Action</th>
+              <th className="text-left p-3 w-10">IG</th>
               <th className="text-left p-3 w-10">Chat</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={11} className="p-6 text-gray-500">Loading…</td></tr>
+              <tr><td colSpan={12} className="p-6 text-gray-500">Loading…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={11} className="p-6 text-gray-500">No leads match these filters.</td></tr>
+              <tr><td colSpan={12} className="p-6 text-gray-500">No leads match these filters.</td></tr>
             ) : filtered.map((l) => {
               const snoozeMs = l.snoozed_until ? new Date(l.snoozed_until).getTime() : null
               const snoozeExpired = snoozeMs !== null && snoozeMs <= Date.now()
@@ -276,6 +277,22 @@ export default function LeadsPage() {
                 <td className="p-3 text-sm text-gray-600">{l.website_status ?? '—'}</td>
                 <td className="p-3 text-sm text-gray-600">{l.evaluation ?? '—'}</td>
                 <td className="p-3 text-sm text-gray-600">{l.strategic_action ?? '—'}</td>
+                <td className="p-3 text-sm" onClick={(e) => e.stopPropagation()}>
+                  {l.instagram_url ? (
+                    <a
+                      href={l.instagram_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-pink-600 hover:text-pink-800"
+                      title={l.instagram_url}
+                      aria-label="Open Instagram"
+                    >
+                      📷
+                    </a>
+                  ) : (
+                    <span className="text-gray-300">—</span>
+                  )}
+                </td>
                 <td className="p-3 text-sm" onClick={(e) => e.stopPropagation()}>
                   {l.phone ? (
                     <a
