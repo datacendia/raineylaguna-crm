@@ -216,6 +216,39 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               <span aria-hidden>📷</span> Instagram
             </a>
           )}
+          {lead.facebook_url && (
+            <a
+              href={lead.facebook_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"
+              title={lead.facebook_url}
+            >
+              <span aria-hidden>👍</span> Facebook
+            </a>
+          )}
+          {lead.linkedin_url && (
+            <a
+              href={lead.linkedin_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-sky-700 hover:bg-sky-800 text-white rounded text-sm"
+              title={lead.linkedin_url}
+            >
+              <span aria-hidden>in</span> LinkedIn
+            </a>
+          )}
+          {lead.tiktok_url && (
+            <a
+              href={lead.tiktok_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-900 hover:bg-black text-white rounded text-sm"
+              title={lead.tiktok_url}
+            >
+              <span aria-hidden>🎵</span> TikTok
+            </a>
+          )}
           {lead.website_url && (
             <a
               href={lead.website_url}
@@ -264,6 +297,30 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               ? <input className="border p-1 rounded w-full" value={form.instagram_url ?? ''} onChange={(e) => setForm({ ...form, instagram_url: e.target.value })} placeholder="https://instagram.com/handle" />
               : (lead.instagram_url
                   ? <a href={lead.instagram_url} target="_blank" rel="noopener noreferrer" className="text-pink-600 hover:underline">{lead.instagram_url.replace(/^https?:\/\/(www\.)?instagram\.com\//, '@').replace(/\/$/, '')}</a>
+                  : '—')}
+          />
+          <Field
+            label="Facebook"
+            value={editing
+              ? <input className="border p-1 rounded w-full" value={form.facebook_url ?? ''} onChange={(e) => setForm({ ...form, facebook_url: e.target.value })} placeholder="https://facebook.com/page" />
+              : (lead.facebook_url
+                  ? <a href={lead.facebook_url} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline">{lead.facebook_url.replace(/^https?:\/\/(www\.)?facebook\.com\//, '').replace(/\/$/, '')}</a>
+                  : '—')}
+          />
+          <Field
+            label="LinkedIn"
+            value={editing
+              ? <input className="border p-1 rounded w-full" value={form.linkedin_url ?? ''} onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })} placeholder="https://linkedin.com/company/slug" />
+              : (lead.linkedin_url
+                  ? <a href={lead.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-sky-700 hover:underline">{lead.linkedin_url.replace(/^https?:\/\/(www\.)?linkedin\.com\//, '').replace(/\/$/, '')}</a>
+                  : '—')}
+          />
+          <Field
+            label="TikTok"
+            value={editing
+              ? <input className="border p-1 rounded w-full" value={form.tiktok_url ?? ''} onChange={(e) => setForm({ ...form, tiktok_url: e.target.value })} placeholder="https://tiktok.com/@handle" />
+              : (lead.tiktok_url
+                  ? <a href={lead.tiktok_url} target="_blank" rel="noopener noreferrer" className="text-gray-900 hover:underline">{lead.tiktok_url.replace(/^https?:\/\/(www\.)?tiktok\.com\//, '').replace(/\/$/, '')}</a>
                   : '—')}
           />
           <Field

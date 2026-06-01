@@ -58,6 +58,12 @@ const NICHES: Array<{ niche: string; term: string }> = [
   { niche: 'Beauty & Wellness', term: 'salón de belleza' },
   { niche: 'Automotive', term: 'taller mecánico' },
   { niche: 'Fitness', term: 'gimnasio' },
+  { niche: 'Retail', term: 'tienda' },
+  { niche: 'Healthcare', term: 'clínica dental' },
+  { niche: 'Education', term: 'academia' },
+  { niche: 'Hospitality', term: 'hotel' },
+  { niche: 'Real Estate', term: 'inmobiliaria' },
+  { niche: 'Professional Services', term: 'contador' },
 ]
 
 const SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText'

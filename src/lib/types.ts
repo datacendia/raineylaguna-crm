@@ -9,6 +9,9 @@ export type Lead = {
   category: string | null
   instagram_active: boolean | null
   instagram_url: string | null
+  facebook_url: string | null
+  linkedin_url: string | null
+  tiktok_url: string | null
   google_place_id: string | null
   website_url: string | null
   website_status: string | null

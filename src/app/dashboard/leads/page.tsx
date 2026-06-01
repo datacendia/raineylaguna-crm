@@ -13,14 +13,87 @@ function whatsappLink(phone: string, name: string): string {
   return `https://wa.me/${e164}?text=${text}`
 }
 
+// The dataset can run to tens of thousands of leads. Rendering every row at
+// once locks up the browser, so the table renders in PAGE_SIZE chunks with a
+// "Show more" control. Filtering/sorting still happens over the full set.
+const PAGE_SIZE = 100
+
+type SortKey =
+  | 'name' | 'score' | 'district' | 'niche' | 'stage' | 'next_action'
+  | 'website' | 'evaluation' | 'strategic_action' | 'social' | 'chat'
+
+// Columns whose first click should sort high-to-low (most relevant first).
+const NUMERIC_KEYS = new Set<SortKey>(['score', 'social', 'chat'])
+
+const socialCount = (l: Lead): number =>
+  [l.instagram_url, l.facebook_url, l.linkedin_url, l.tiktok_url].filter(Boolean).length
+
+function SortHeader({
+  label, sortKey, sort, onSort, className,
+}: {
+  label: string
+  sortKey: SortKey
+  sort: { key: SortKey; dir: 'asc' | 'desc' }
+  onSort: (k: SortKey) => void
+  className?: string
+}) {
+  const active = sort.key === sortKey
+  return (
+    <th
+      className={`text-left p-3 cursor-pointer select-none whitespace-nowrap hover:bg-gray-100 ${className ?? ''}`}
+      onClick={() => onSort(sortKey)}
+      title={`Sort by ${label}`}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <span className={`text-[10px] ${active ? 'text-vermilion' : 'text-gray-300'}`}>
+          {active ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}
+        </span>
+      </span>
+    </th>
+  )
+}
+
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState({ district: 'all', niche: 'all', stage: 'all', search: '', includeSnoozed: false, sortBy: 'score' as 'score' | 'created' })
+  const [filters, setFilters] = useState({
+    district: 'all', niche: 'all', stage: 'all', search: '', includeSnoozed: false,
+    website: 'all', evaluation: 'all', social: 'all', chat: 'all', nextAction: '', strategicAction: '',
+  })
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'score', dir: 'desc' })
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkStage, setBulkStage] = useState<PipelineStage>('Contacted')
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkSnoozeDate, setBulkSnoozeDate] = useState('')
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+  // Update filters and reset paging to the first chunk together. Doing this in
+  // one handler avoids a setState-in-effect and keeps the rendered list bounded
+  // after any filter/search/sort change.
+  const applyFilter = (patch: Partial<typeof filters>) => {
+    setFilters((f) => ({ ...f, ...patch }))
+    setVisibleCount(PAGE_SIZE)
+  }
+
+  // Clicking a header sorts by that column; clicking the active column flips
+  // direction. Numeric columns start descending, text columns ascending.
+  const toggleSort = (key: SortKey) => {
+    setSort((s) =>
+      s.key === key
+        ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: NUMERIC_KEYS.has(key) ? 'desc' : 'asc' },
+    )
+    setVisibleCount(PAGE_SIZE)
+  }
+
+  const resetFilters = () => {
+    setFilters({
+      district: 'all', niche: 'all', stage: 'all', search: '', includeSnoozed: false,
+      website: 'all', evaluation: 'all', social: 'all', chat: 'all', nextAction: '', strategicAction: '',
+    })
+    setVisibleCount(PAGE_SIZE)
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -37,14 +110,61 @@ export default function LeadsPage() {
       })
   }, [filters.district, filters.niche, filters.stage, filters.includeSnoozed])
 
+  // Distinct Website-status / Evaluation values for their dropdowns, derived
+  // from the loaded set so the options always reflect real data.
+  const websiteStatuses = Array.from(new Set(leads.map((l) => l.website_status).filter(Boolean))).sort() as string[]
+  const evaluations = Array.from(new Set(leads.map((l) => l.evaluation).filter(Boolean))).sort() as string[]
+
   const scored = leads.map((l) => ({ lead: l, ps: computePriorityScore(l) }))
-  const searched = filters.search
-    ? scored.filter(({ lead }) => lead.name.toLowerCase().includes(filters.search.toLowerCase()))
-    : scored
-  const sorted = filters.sortBy === 'score'
-    ? [...searched].sort((a, b) => b.ps.score - a.ps.score)
-    : searched
+
+  const matchSocial = (l: Lead): boolean => {
+    switch (filters.social) {
+      case 'any': return socialCount(l) > 0
+      case 'none': return socialCount(l) === 0
+      case 'instagram': return !!l.instagram_url
+      case 'facebook': return !!l.facebook_url
+      case 'linkedin': return !!l.linkedin_url
+      case 'tiktok': return !!l.tiktok_url
+      default: return true
+    }
+  }
+
+  const rows = scored.filter(({ lead }) => {
+    if (filters.search && !lead.name.toLowerCase().includes(filters.search.toLowerCase())) return false
+    if (filters.website !== 'all' && (lead.website_status ?? '') !== filters.website) return false
+    if (filters.evaluation !== 'all' && (lead.evaluation ?? '') !== filters.evaluation) return false
+    if (filters.nextAction && !(lead.next_action ?? '').toLowerCase().includes(filters.nextAction.toLowerCase())) return false
+    if (filters.strategicAction && !(lead.strategic_action ?? '').toLowerCase().includes(filters.strategicAction.toLowerCase())) return false
+    if (filters.social !== 'all' && !matchSocial(lead)) return false
+    if (filters.chat !== 'all' && (filters.chat === 'has' ? !lead.phone : !!lead.phone)) return false
+    return true
+  })
+
+  const dir = sort.dir === 'asc' ? 1 : -1
+  const sortVal = (r: { lead: Lead; ps: { score: number } }): string | number => {
+    const l = r.lead
+    switch (sort.key) {
+      case 'score': return r.ps.score
+      case 'social': return socialCount(l)
+      case 'chat': return l.phone ? 1 : 0
+      case 'stage': return STAGES.indexOf(l.pipeline_stage)
+      case 'name': return l.name.toLowerCase()
+      case 'district': return (l.district ?? '').toLowerCase()
+      case 'niche': return (l.niche ?? '').toLowerCase()
+      case 'next_action': return (l.next_action ?? '').toLowerCase()
+      case 'website': return (l.website_status ?? '').toLowerCase()
+      case 'evaluation': return (l.evaluation ?? '').toLowerCase()
+      case 'strategic_action': return (l.strategic_action ?? '').toLowerCase()
+      default: return 0
+    }
+  }
+  const sorted = [...rows].sort((a, b) => {
+    const av = sortVal(a), bv = sortVal(b)
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir
+    return String(av).localeCompare(String(bv)) * dir
+  })
   const filtered = sorted.map((s) => s.lead)
+  const visible = filtered.slice(0, visibleCount)
   const scoreById = new Map(sorted.map((s) => [s.lead.id, s.ps]))
 
   const toggleAll = () => {
@@ -105,49 +225,80 @@ export default function LeadsPage() {
         <h1 className="text-4xl font-bold">Leads <span className="text-base text-gray-500 font-normal">({filtered.length})</span></h1>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="bg-white rounded-lg shadow p-6 mb-6 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <input
             type="text"
             placeholder="Search by name…"
             value={filters.search}
-            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            onChange={(e) => applyFilter({ search: e.target.value })}
             className="border p-2 rounded"
           />
-          <select value={filters.district} onChange={(e) => setFilters({ ...filters, district: e.target.value })} className="border p-2 rounded">
+          <select value={filters.district} onChange={(e) => applyFilter({ district: e.target.value })} className="border p-2 rounded">
             <option value="all">All Districts</option>
             {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
-          <select value={filters.niche} onChange={(e) => setFilters({ ...filters, niche: e.target.value })} className="border p-2 rounded">
+          <select value={filters.niche} onChange={(e) => applyFilter({ niche: e.target.value })} className="border p-2 rounded">
             <option value="all">All Niches</option>
             {NICHES.map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
-          <select value={filters.stage} onChange={(e) => setFilters({ ...filters, stage: e.target.value })} className="border p-2 rounded">
+          <select value={filters.stage} onChange={(e) => applyFilter({ stage: e.target.value })} className="border p-2 rounded">
             <option value="all">All Stages</option>
             {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
-        <div className="flex items-center gap-6 mt-3 flex-wrap">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <select value={filters.website} onChange={(e) => applyFilter({ website: e.target.value })} className="border p-2 rounded">
+            <option value="all">All Website statuses</option>
+            {websiteStatuses.map((w) => <option key={w} value={w}>{w}</option>)}
+          </select>
+          <select value={filters.evaluation} onChange={(e) => applyFilter({ evaluation: e.target.value })} className="border p-2 rounded">
+            <option value="all">All Evaluations</option>
+            {evaluations.map((ev) => <option key={ev} value={ev}>{ev}</option>)}
+          </select>
+          <select value={filters.social} onChange={(e) => applyFilter({ social: e.target.value })} className="border p-2 rounded">
+            <option value="all">All Social</option>
+            <option value="any">Has any social</option>
+            <option value="none">No social</option>
+            <option value="instagram">Has Instagram</option>
+            <option value="facebook">Has Facebook</option>
+            <option value="linkedin">Has LinkedIn</option>
+            <option value="tiktok">Has TikTok</option>
+          </select>
+          <select value={filters.chat} onChange={(e) => applyFilter({ chat: e.target.value })} className="border p-2 rounded">
+            <option value="all">Phone: any</option>
+            <option value="has">Has phone</option>
+            <option value="none">No phone</option>
+          </select>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
+          <input
+            type="text"
+            placeholder="Next action contains…"
+            value={filters.nextAction}
+            onChange={(e) => applyFilter({ nextAction: e.target.value })}
+            className="border p-2 rounded"
+          />
+          <input
+            type="text"
+            placeholder="Strategic action contains…"
+            value={filters.strategicAction}
+            onChange={(e) => applyFilter({ strategicAction: e.target.value })}
+            className="border p-2 rounded"
+          />
           <label className="flex items-center gap-2 text-sm text-gray-600">
             <input
               type="checkbox"
               checked={filters.includeSnoozed}
-              onChange={(e) => setFilters({ ...filters, includeSnoozed: e.target.checked })}
+              onChange={(e) => applyFilter({ includeSnoozed: e.target.checked })}
             />
             Include snoozed leads
           </label>
-          <label className="flex items-center gap-2 text-sm text-gray-600">
-            Sort by
-            <select
-              value={filters.sortBy}
-              onChange={(e) => setFilters({ ...filters, sortBy: e.target.value as 'score' | 'created' })}
-              className="border p-1 rounded text-sm"
-            >
-              <option value="score">Priority score</option>
-              <option value="created">Newest first</option>
-            </select>
-          </label>
+          <button onClick={resetFilters} className="border rounded px-3 py-2 text-sm hover:bg-gray-50">
+            Clear filters
+          </button>
         </div>
+        <p className="text-xs text-gray-400">Tip: click any column header to sort; click again to reverse.</p>
       </div>
 
       {selected.size > 0 && (
@@ -216,17 +367,17 @@ export default function LeadsPage() {
           <thead className="border-b bg-gray-50">
             <tr>
               <th className="p-3 w-8"><input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleAll} /></th>
-              <th className="text-left p-3">Name</th>
-              <th className="text-left p-3">Score</th>
-              <th className="text-left p-3">District</th>
-              <th className="text-left p-3">Niche</th>
-              <th className="text-left p-3">Stage</th>
-              <th className="text-left p-3">Next Action</th>
-              <th className="text-left p-3">Website</th>
-              <th className="text-left p-3">Evaluation</th>
-              <th className="text-left p-3">Strategic Action</th>
-              <th className="text-left p-3 w-10">IG</th>
-              <th className="text-left p-3 w-10">Chat</th>
+              <SortHeader label="Name" sortKey="name" sort={sort} onSort={toggleSort} />
+              <SortHeader label="Score" sortKey="score" sort={sort} onSort={toggleSort} />
+              <SortHeader label="District" sortKey="district" sort={sort} onSort={toggleSort} />
+              <SortHeader label="Niche" sortKey="niche" sort={sort} onSort={toggleSort} />
+              <SortHeader label="Stage" sortKey="stage" sort={sort} onSort={toggleSort} />
+              <SortHeader label="Next Action" sortKey="next_action" sort={sort} onSort={toggleSort} />
+              <SortHeader label="Website" sortKey="website" sort={sort} onSort={toggleSort} />
+              <SortHeader label="Evaluation" sortKey="evaluation" sort={sort} onSort={toggleSort} />
+              <SortHeader label="Strategic Action" sortKey="strategic_action" sort={sort} onSort={toggleSort} />
+              <SortHeader label="Social" sortKey="social" sort={sort} onSort={toggleSort} />
+              <SortHeader label="Chat" sortKey="chat" sort={sort} onSort={toggleSort} className="w-10" />
             </tr>
           </thead>
           <tbody>
@@ -234,7 +385,7 @@ export default function LeadsPage() {
               <tr><td colSpan={12} className="p-6 text-gray-500">Loading…</td></tr>
             ) : filtered.length === 0 ? (
               <tr><td colSpan={12} className="p-6 text-gray-500">No leads match these filters.</td></tr>
-            ) : filtered.map((l) => {
+            ) : visible.map((l) => {
               const snoozeMs = l.snoozed_until ? new Date(l.snoozed_until).getTime() : null
               const snoozeExpired = snoozeMs !== null && snoozeMs <= Date.now()
               const snoozeActive = snoozeMs !== null && snoozeMs > Date.now()
@@ -278,20 +429,23 @@ export default function LeadsPage() {
                 <td className="p-3 text-sm text-gray-600">{l.evaluation ?? '—'}</td>
                 <td className="p-3 text-sm text-gray-600">{l.strategic_action ?? '—'}</td>
                 <td className="p-3 text-sm" onClick={(e) => e.stopPropagation()}>
-                  {l.instagram_url ? (
-                    <a
-                      href={l.instagram_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-pink-600 hover:text-pink-800"
-                      title={l.instagram_url}
-                      aria-label="Open Instagram"
-                    >
-                      📷
-                    </a>
-                  ) : (
-                    <span className="text-gray-300">—</span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {l.instagram_url && (
+                      <a href={l.instagram_url} target="_blank" rel="noopener noreferrer" className="text-pink-600 hover:text-pink-800" title={l.instagram_url} aria-label="Open Instagram">📷</a>
+                    )}
+                    {l.facebook_url && (
+                      <a href={l.facebook_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800" title={l.facebook_url} aria-label="Open Facebook">👍</a>
+                    )}
+                    {l.linkedin_url && (
+                      <a href={l.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-sky-700 hover:text-sky-900 font-semibold text-xs" title={l.linkedin_url} aria-label="Open LinkedIn">in</a>
+                    )}
+                    {l.tiktok_url && (
+                      <a href={l.tiktok_url} target="_blank" rel="noopener noreferrer" className="text-gray-900 hover:text-black" title={l.tiktok_url} aria-label="Open TikTok">🎵</a>
+                    )}
+                    {!l.instagram_url && !l.facebook_url && !l.linkedin_url && !l.tiktok_url && (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </div>
                 </td>
                 <td className="p-3 text-sm" onClick={(e) => e.stopPropagation()}>
                   {l.phone ? (
@@ -314,6 +468,20 @@ export default function LeadsPage() {
           </tbody>
         </table>
       </div>
+
+      {!loading && filtered.length > 0 && (
+        <div className="flex items-center justify-center gap-4 mt-4 text-sm text-gray-600">
+          <span>Showing {Math.min(visibleCount, filtered.length)} of {filtered.length}</span>
+          {visibleCount < filtered.length && (
+            <button
+              onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+              className="px-4 py-1.5 border rounded hover:bg-gray-50"
+            >
+              Show {Math.min(PAGE_SIZE, filtered.length - visibleCount)} more
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -21,6 +21,11 @@
   "engines": {
     "node": ">=20.9.0"
   },
+  "pnpm": {
+    "overrides": {
+      "ioredis": "5.10.1"
+    }
+  },
   "dependencies": {
     "@sentry/nextjs": "^10.52.0",
     "bcryptjs": "^3.0.3",

@@ -1,7 +1,7 @@
 -- Multi-user admin auth: replaces the single CRM_PASSWORD_HASH env var
 -- with a proper admin_users table.
 
-CREATE TABLE admin_users (
+CREATE TABLE IF NOT EXISTS admin_users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email VARCHAR(255) NOT NULL UNIQUE,
   name VARCHAR(255) NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE admin_users (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_admin_users_email ON admin_users(email);
+CREATE INDEX IF NOT EXISTS idx_admin_users_email ON admin_users(email);
 
-CREATE TRIGGER update_admin_users_updated_at BEFORE UPDATE ON admin_users
+CREATE OR REPLACE TRIGGER update_admin_users_updated_at BEFORE UPDATE ON admin_users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
