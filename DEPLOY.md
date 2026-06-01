@@ -64,6 +64,10 @@ On **both** the Web and Worker services, set:
 | `REDIS_URL` | reference to Redis service |
 | `NODE_ENV` | `production` |
 
+**Optional:** set `GOOGLE_PAGESPEED_API_KEY` on the Web service to raise the
+Digital Presence Audit quota (it falls back to keyless PageSpeed Insights if
+unset). See `src/lib/env.ts` for the full set of optional integration keys.
+
 The Web service additionally needs a public domain — Railway auto-creates `*.up.railway.app`. Add a custom domain like `crm.raineylaguna.com` in Settings → Networking → Custom Domain, then point a CNAME from your DNS to the Railway-provided target.
 
 ---

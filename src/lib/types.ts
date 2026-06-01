@@ -16,6 +16,9 @@ export type Lead = {
   address: string | null
   website_url: string | null
   website_status: string | null
+  digital_health_score: number | null
+  audit_findings: AuditFindings | null
+  audited_at: string | null
   evaluation: string | null
   strategic_action: string | null
   potential: string | null
@@ -59,6 +62,39 @@ export type VideoAudit = {
   conversion_status: string
   created_at: string
   updated_at: string
+}
+
+export type AuditFlagSeverity = 'high' | 'medium' | 'low'
+
+export type AuditFlag = {
+  id: string
+  label: string
+  severity: AuditFlagSeverity
+}
+
+export type AuditScores = {
+  performance: number | null
+  seo: number | null
+  accessibility: number | null
+  bestPractices: number | null
+}
+
+export type AuditMetrics = {
+  lcpMs: number | null
+}
+
+/**
+ * Result of a digital-presence audit for one lead. Stored as jsonb in
+ * crm_leads.audit_findings; `score` is mirrored to digital_health_score.
+ */
+export type AuditFindings = {
+  score: number
+  hadSite: boolean
+  reachable: boolean
+  scores: AuditScores
+  metrics: AuditMetrics
+  flags: AuditFlag[]
+  summary: string
 }
 
 export const DISTRICTS = [

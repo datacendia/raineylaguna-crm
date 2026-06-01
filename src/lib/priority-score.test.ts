@@ -30,6 +30,9 @@ const baseLead = (overrides: Partial<Lead> = {}): Lead => ({
   address: null,
   website_url: null,
   website_status: null,
+  digital_health_score: null,
+  audit_findings: null,
+  audited_at: null,
   evaluation: null,
   strategic_action: null,
   potential: null,
@@ -97,6 +100,14 @@ describe('computePriorityScore', () => {
     )
     expect(ps.band).toBe('Crítico')
     expect(ps.score).toBeGreaterThanOrEqual(75)
+  })
+
+  it('a digital_health_score overrides website_status for website-gap points', () => {
+    const bad = computePriorityScore(baseLead({ digital_health_score: 10 }), NOW)
+    const good = computePriorityScore(baseLead({ digital_health_score: 90 }), NOW)
+    expect(bad.breakdown.website).toBeGreaterThan(good.breakdown.website)
+    expect(bad.breakdown.website).toBeGreaterThanOrEqual(25)
+    expect(good.breakdown.website).toBeLessThanOrEqual(5)
   })
 
   it('a snoozed lead has zero workability', () => {

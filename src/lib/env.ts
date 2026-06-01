@@ -47,6 +47,7 @@ const ENV_KEYS = [
   'TWILIO_AUTH_TOKEN',
   'TWILIO_WHATSAPP_FROM',
   'TWILIO_TEMPLATE_SID',
+  'GOOGLE_PAGESPEED_API_KEY', // audit route falls back to keyless PageSpeed (lower quota) when unset
 
   // Build / runtime metadata
   'NEXT_PUBLIC_GIT_SHA', // /api/health surfaces this as `version`; falls back to 'unknown'

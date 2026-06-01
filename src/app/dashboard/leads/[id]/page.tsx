@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { STAGES, CHANNELS, type Lead, type OutreachEvent, type OutreachDraft, type VideoAudit } from '@/lib/types'
 import ScriptPanel from '@/components/ScriptPanel'
 import { googleMapsUrl, googleMapsEmbedUrl } from '@/lib/maps'
+import { healthColor, severityColor } from '@/lib/audit'
 
 type LeadResponse = { lead: Lead; outreach: OutreachEvent[]; audits: VideoAudit[] }
 
@@ -44,6 +45,8 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const [draftBody, setDraftBody] = useState<string>('')
   const [generating, setGenerating] = useState(false)
   const [draftError, setDraftError] = useState<string | null>(null)
+  const [auditing, setAuditing] = useState(false)
+  const [auditError, setAuditError] = useState<string | null>(null)
 
   const loadDraft = () => {
     fetch(`/api/leads/${id}/draft-outreach`)
@@ -118,6 +121,21 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     })
     setEditing(false)
     load()
+  }
+
+  const runAudit = async () => {
+    setAuditing(true)
+    setAuditError(null)
+    try {
+      const res = await fetch(`/api/leads/${id}/audit`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Audit failed')
+      load()
+    } catch (e) {
+      setAuditError(e instanceof Error ? e.message : 'Audit failed')
+    } finally {
+      setAuditing(false)
+    }
   }
 
   /**
@@ -441,6 +459,72 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             placeholder="Internal notes…"
           />
         </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-medium text-gray-700">Digital Audit</h2>
+            {lead.audited_at && (
+              <span className="text-xs text-gray-400">{new Date(lead.audited_at).toLocaleString()}</span>
+            )}
+          </div>
+          <button
+            onClick={runAudit}
+            disabled={auditing}
+            className="px-3 py-1 border rounded text-sm disabled:opacity-50"
+          >
+            {auditing ? 'Auditing…' : lead.audited_at ? 'Re-run audit' : 'Run audit'}
+          </button>
+        </div>
+
+        {auditError && <p className="text-sm text-red-600 mb-3">{auditError}</p>}
+
+        {lead.digital_health_score == null ? (
+          <p className="text-sm text-gray-500">
+            Not audited yet. Runs Google PageSpeed + on-page checks (~10–20s).
+          </p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-start gap-4">
+              {(() => {
+                const c = healthColor(lead.digital_health_score)
+                return (
+                  <div className={`flex flex-col items-center justify-center w-20 h-20 rounded-lg shrink-0 ${c.bg} ${c.text}`}>
+                    <span className="text-2xl font-bold tabular-nums">{lead.digital_health_score}</span>
+                    <span className="text-[10px] uppercase tracking-wide">Health</span>
+                  </div>
+                )
+              })()}
+              <div className="flex-1">
+                <p className="text-sm text-gray-700">{lead.audit_findings?.summary}</p>
+                {lead.audit_findings && (
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+                    {lead.audit_findings.scores.performance != null && <span>Perf {lead.audit_findings.scores.performance}</span>}
+                    {lead.audit_findings.scores.seo != null && <span>SEO {lead.audit_findings.scores.seo}</span>}
+                    {lead.audit_findings.scores.accessibility != null && <span>A11y {lead.audit_findings.scores.accessibility}</span>}
+                    {lead.audit_findings.scores.bestPractices != null && <span>BP {lead.audit_findings.scores.bestPractices}</span>}
+                    {lead.audit_findings.metrics.lcpMs != null && <span>LCP {(lead.audit_findings.metrics.lcpMs / 1000).toFixed(1)}s</span>}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {lead.audit_findings?.flags?.length ? (
+              <ul className="flex flex-col gap-1.5">
+                {lead.audit_findings.flags.map((f) => {
+                  const c = severityColor(f.severity)
+                  return (
+                    <li key={f.id} className="flex items-center gap-2 text-sm">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-semibold ${c.bg} ${c.text}`}>{f.severity}</span>
+                      <span className="text-gray-700">{f.label}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : null}
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-lg shadow p-6 mb-6">

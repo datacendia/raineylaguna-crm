@@ -42,6 +42,11 @@ const NICHE_WEIGHTS: Record<string, number> = {
 
 /** Returns 0-30 based on website state. The worse it is, the bigger the sale. */
 function websitePoints(lead: Lead): number {
+  // A real digital audit, when present, is a far more precise opportunity
+  // signal than the free-text status — lower health = bigger sale.
+  if (typeof lead.digital_health_score === 'number') {
+    return Math.round(30 * (1 - lead.digital_health_score / 100))
+  }
   const status = (lead.website_status ?? '').toLowerCase().trim()
   if (!lead.website_url || status === 'none' || status === 'no website' || status === 'sin web') return 30
   if (status.includes('broken') || status.includes('404') || status.includes('rota')) return 28

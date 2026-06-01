@@ -11,16 +11,17 @@
  */
 
 import type { Pool } from 'pg'
+import type { AuditFindings } from './types'
 import { complete } from './anthropic'
 
-export const PROMPT_VERSION = 'v1-2026-05-06'
+export const PROMPT_VERSION = 'v2-2026-06-01'
 
 const SYSTEM_PROMPT = `You are a senior B2B copywriter for Rainey Laguna, a boutique web-development studio in Lima, Peru. You write the first WhatsApp message a sales rep sends to a Peruvian small-business owner who has never heard of us.
 
 Constraints:
 - Spanish (Peruvian register, neutral). Voseo NEVER. Use tú.
 - 2 short paragraphs, max 90 words total.
-- One concrete observation about THEIR business (district, niche, website status, evaluation, or strategic action — whichever is most specific). NEVER invent facts not present in the brief.
+- One concrete observation about THEIR business — prefer a specific website-audit finding ("Problemas detectados") when present (e.g. "su web no es segura / sin candado" o "carga lenta en celular"), otherwise district, niche, website status, evaluation or strategic action. NEVER invent facts not in the brief, and NEVER cite a number or metric that is not in the brief.
 - One specific, low-friction next step (e.g., "te mando un Loom de 90 segundos con dos cambios concretos").
 - No emojis. No exclamation marks beyond the greeting. No "espero que te encuentres bien".
 - Sign off as "— Equipo Rainey Laguna" on its own line.
@@ -38,6 +39,12 @@ function buildUserPrompt(lead: Record<string, unknown>): string {
   push('Categoría', lead.category)
   push('Website', lead.website_url)
   push('Estado del website', lead.website_status)
+  const audit = lead.audit_findings as AuditFindings | null
+  push('Auditoría del sitio', audit?.summary)
+  if (audit?.flags?.length) {
+    push('Problemas detectados', audit.flags.map((f) => f.label).join('; '))
+  }
+  push('Digital Health Score', lead.digital_health_score)
   push('Evaluación', lead.evaluation)
   push('Acción estratégica sugerida', lead.strategic_action)
   push('Potencial', lead.potential)

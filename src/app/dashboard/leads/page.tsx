@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { DISTRICTS, NICHES, STAGES, type Lead, type PipelineStage } from '@/lib/types'
 import { computePriorityScore, bandColor } from '@/lib/priority-score'
 import { googleMapsUrl } from '@/lib/maps'
+import { healthColor } from '@/lib/audit'
 
 function whatsappLink(phone: string, name: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -21,10 +22,10 @@ const PAGE_SIZE = 100
 
 type SortKey =
   | 'name' | 'score' | 'district' | 'address' | 'niche' | 'stage' | 'next_action'
-  | 'website' | 'evaluation' | 'strategic_action' | 'email' | 'phone' | 'social' | 'chat'
+  | 'website' | 'health' | 'evaluation' | 'strategic_action' | 'email' | 'phone' | 'social' | 'chat'
 
 // Columns whose first click should sort high-to-low (most relevant first).
-const NUMERIC_KEYS = new Set<SortKey>(['score', 'social', 'chat'])
+const NUMERIC_KEYS = new Set<SortKey>(['score', 'health', 'social', 'chat'])
 
 const socialCount = (l: Lead): number =>
   [l.instagram_url, l.facebook_url, l.linkedin_url, l.tiktok_url].filter(Boolean).length
@@ -155,6 +156,7 @@ export default function LeadsPage() {
       case 'niche': return (l.niche ?? '').toLowerCase()
       case 'next_action': return (l.next_action ?? '').toLowerCase()
       case 'website': return (l.website_status ?? '').toLowerCase()
+      case 'health': return l.digital_health_score ?? -1
       case 'evaluation': return (l.evaluation ?? '').toLowerCase()
       case 'strategic_action': return (l.strategic_action ?? '').toLowerCase()
       case 'email': return (l.email ?? '').toLowerCase()
@@ -379,6 +381,7 @@ export default function LeadsPage() {
               <SortHeader label="Stage" sortKey="stage" sort={sort} onSort={toggleSort} />
               <SortHeader label="Next Action" sortKey="next_action" sort={sort} onSort={toggleSort} />
               <SortHeader label="Website" sortKey="website" sort={sort} onSort={toggleSort} />
+              <SortHeader label="Health" sortKey="health" sort={sort} onSort={toggleSort} />
               <SortHeader label="Evaluation" sortKey="evaluation" sort={sort} onSort={toggleSort} />
               <SortHeader label="Strategic Action" sortKey="strategic_action" sort={sort} onSort={toggleSort} />
               <SortHeader label="Email" sortKey="email" sort={sort} onSort={toggleSort} />
@@ -389,9 +392,9 @@ export default function LeadsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={15} className="p-6 text-gray-500">Loading…</td></tr>
+              <tr><td colSpan={16} className="p-6 text-gray-500">Loading…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={15} className="p-6 text-gray-500">No leads match these filters.</td></tr>
+              <tr><td colSpan={16} className="p-6 text-gray-500">No leads match these filters.</td></tr>
             ) : visible.map((l) => {
               const snoozeMs = l.snoozed_until ? new Date(l.snoozed_until).getTime() : null
               const snoozeExpired = snoozeMs !== null && snoozeMs <= Date.now()
@@ -438,6 +441,21 @@ export default function LeadsPage() {
                   {l.next_action ?? <span className="text-gray-300">—</span>}
                 </td>
                 <td className="p-3 text-sm text-gray-600">{l.website_status ?? '—'}</td>
+                <td className="p-3 text-sm">
+                  {l.digital_health_score == null ? (
+                    <span className="text-gray-300">—</span>
+                  ) : (() => {
+                    const c = healthColor(l.digital_health_score)
+                    return (
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums ${c.bg} ${c.text}`}
+                        title={l.audit_findings?.summary ?? ''}
+                      >
+                        {l.digital_health_score}
+                      </span>
+                    )
+                  })()}
+                </td>
                 <td className="p-3 text-sm text-gray-600">{l.evaluation ?? '—'}</td>
                 <td className="p-3 text-sm text-gray-600">{l.strategic_action ?? '—'}</td>
                 <td className="p-3 text-sm max-w-[14rem] truncate" onClick={(e) => e.stopPropagation()}>
