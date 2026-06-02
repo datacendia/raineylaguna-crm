@@ -63,7 +63,7 @@ export default function GuidePage() {
             The Rainey Laguna CRM manages our pipeline of small-business leads across Lima&rsquo;s
             districts. For each lead it can run a website audit, score how worth-pursuing it is,
             generate and send personalized outreach, track delivery and replies, and flag the
-            leads that go on to become Sereno (vigia) customers.
+            leads that go on to become Sereno customers.
           </p>
           <p>
             Everything is staff-only and gated behind login. Outreach integrations
