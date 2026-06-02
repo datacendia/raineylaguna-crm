@@ -10,6 +10,7 @@
     "seed": "tsx scripts/seed.ts",
     "user:create": "tsx scripts/user-create.ts",
     "worker": "tsx scripts/outreach-worker.ts",
+    "outreach-drain": "tsx scripts/outreach-drain.ts",
     "migrate": "tsx scripts/migrate.ts",
     "draft-outreach-cron": "tsx scripts/draft-outreach-cron.ts",
     "sync-sereno": "tsx scripts/sync-sereno-customers.ts",

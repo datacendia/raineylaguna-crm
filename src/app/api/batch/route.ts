@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
-import { getOutreachQueue } from '@/lib/queue'
 import { templatesFor, SCRIPT_TEMPLATES } from '@/lib/scripts'
 import { businessHourSlot } from '@/lib/schedule'
 import type { Lead } from '@/lib/types'
@@ -14,8 +13,9 @@ import type { Lead } from '@/lib/types'
  *   start_at?: string     // ISO timestamp
  * }
  *
- * Spreads jobs across days, stamping each as a pending crm_outreach_event,
- * and enqueues a BullMQ job for the worker (which will later send / remind).
+ * Spreads sends across Lima business hours, stamping each as a Pending
+ * crm_outreach_event. The outreach-drain cron (scripts/outreach-drain.ts) then
+ * delivers each event once its scheduled_for time arrives.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -25,16 +25,6 @@ export async function POST(request: NextRequest) {
     }
     const tpl = SCRIPT_TEMPLATES.find((t) => t.id === template_id)
     if (!tpl) return NextResponse.json({ error: 'Unknown template' }, { status: 400 })
-
-    // Queue is lazily constructed so the rest of the app boots even when
-    // Redis isn't configured. Surface a clear 503 here if so.
-    const outreachQueue = getOutreachQueue()
-    if (!outreachQueue) {
-      return NextResponse.json(
-        { error: 'Outreach queue unavailable: REDIS_URL is not configured.' },
-        { status: 503 },
-      )
-    }
 
     const base = start_at ? new Date(start_at) : new Date()
     const { rows } = await pool.query<Lead>(
@@ -51,22 +41,11 @@ export async function POST(request: NextRequest) {
       const scheduledFor = businessHourSlot(base, scheduled, per_day)
 
       const body = tpl.render(lead)
-      const subject = tpl.channel === 'Email' ? tpl.subject?.(lead) : undefined
-      const insert = await pool.query(
-        `INSERT INTO crm_outreach_events (lead_id, channel, status, scheduled_for, notes)
-         VALUES ($1, $2, 'Pending', $3, $4) RETURNING id`,
-        [lead.id, tpl.channel, scheduledFor, body]
-      )
-      const eventId = insert.rows[0].id
-      await outreachQueue.add(
-        'send',
-        { lead_id: lead.id, channel: tpl.channel, body, subject, template_id: tpl.id },
-        {
-          delay: Math.max(0, scheduledFor.getTime() - Date.now()),
-          jobId: eventId,
-          removeOnComplete: 1000,
-          removeOnFail: 1000,
-        }
+      const subject = tpl.channel === 'Email' ? tpl.subject?.(lead) ?? null : null
+      await pool.query(
+        `INSERT INTO crm_outreach_events (lead_id, channel, status, scheduled_for, notes, subject)
+         VALUES ($1, $2, 'Pending', $3, $4, $5)`,
+        [lead.id, tpl.channel, scheduledFor, body, subject]
       )
       scheduled++
     }
