@@ -528,6 +528,44 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-medium text-gray-700">Deep Audit Workbench</h2>
+            {lead.manual_audited_at && (
+              <span className="text-xs text-gray-400">{new Date(lead.manual_audited_at).toLocaleString()}</span>
+            )}
+          </div>
+          <Link
+            href={`/dashboard/leads/${id}/audit-workbench`}
+            className="px-3 py-1 border rounded text-sm hover:bg-gray-50"
+          >
+            {lead.manual_audited_at ? 'Continue audit →' : 'Open workbench →'}
+          </Link>
+        </div>
+        {lead.manual_audit_score == null ? (
+          <p className="text-sm text-gray-500 mt-3">
+            Manual, evidence-based audit — 8 dimensions / ~70 weighted checks with a printable client report.
+          </p>
+        ) : (
+          <div className="flex items-center gap-4 mt-3">
+            {(() => {
+              const c = healthColor(lead.manual_audit_score)
+              return (
+                <div className={`flex flex-col items-center justify-center w-20 h-20 rounded-lg shrink-0 ${c.bg} ${c.text}`}>
+                  <span className="text-2xl font-bold tabular-nums">{lead.manual_audit_score}</span>
+                  <span className="text-[10px] uppercase tracking-wide">Manual</span>
+                </div>
+              )
+            })()}
+            <p className="text-sm text-gray-600">
+              {lead.manual_audit?.scored ?? 0}/{lead.manual_audit?.scope ?? 0} checks scored
+              {lead.manual_audit?.profile ? ` · ${lead.manual_audit.profile} model` : ''}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
         <div className="flex items-center justify-between gap-3 mb-3">
           <h2 className="text-sm font-medium text-gray-700">Location</h2>
           <a

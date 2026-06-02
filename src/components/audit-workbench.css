@@ -1,0 +1,166 @@
+/*
+ * Website Audit Workbench styles. Every rule is scoped under `.awb` so this
+ * global stylesheet can't bleed into the rest of the (Tailwind) CRM. Ported
+ * from the standalone workbench; palette/typography preserved.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+.awb {
+  --paper:#F2ECE0; --paper2:#FBF7EE; --card:#FFFDF8; --ink:#211F1A; --ink-soft:#5E5A52;
+  --line:#DCD3C2; --line-soft:#E8E0D1; --accent:#0F555B; --accent-ink:#0A3A3F;
+  --s0:#C0463B; --s1:#D17A2B; --s2:#C9A227; --s3:#6FA63C; --s4:#2F8F5B; --na:#A39D90;
+  --shadow:0 1px 2px rgba(33,31,26,.05), 0 8px 24px -16px rgba(33,31,26,.25);
+  --mono:'IBM Plex Mono',ui-monospace,monospace; --disp:'Fraunces',Georgia,serif; --body:'Hanken Grotesk',system-ui,sans-serif;
+  background:var(--paper); color:var(--ink); font-family:var(--body);
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(rgba(15,85,91,.035) 1px, transparent 1px); background-size:22px 22px;
+  min-height:100vh;
+}
+.awb *{box-sizing:border-box}
+.awb a{color:var(--accent-ink); text-decoration-color:var(--line)}
+.awb .wrap{max-width:1080px; margin:0 auto; padding:0 22px}
+
+/* Top bar */
+.awb .topbar{position:sticky; top:0; z-index:30; background:rgba(242,236,224,.86); backdrop-filter:saturate(150%) blur(8px); border-bottom:1px solid var(--line);}
+.awb .topbar .row{display:flex; align-items:center; justify-content:space-between; gap:18px; padding:12px 0;}
+.awb .brand{display:flex; flex-direction:column; gap:2px; min-width:0}
+.awb .wordmark{font-family:var(--mono); font-size:11px; letter-spacing:.32em; color:var(--accent); text-transform:uppercase}
+.awb .ttl{font-family:var(--disp); font-weight:600; font-size:21px; line-height:1; letter-spacing:-.01em}
+.awb .scorebox{display:flex; align-items:center; gap:14px}
+.awb .scorebox .num{font-family:var(--disp); font-weight:600; font-size:42px; line-height:.9; font-variant-numeric:tabular-nums}
+.awb .scorebox .meta{display:flex; flex-direction:column; gap:4px; align-items:flex-start}
+.awb .band{font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; padding:3px 8px; border-radius:999px; color:#fff; white-space:nowrap}
+.awb .complete{font-family:var(--mono); font-size:10.5px; color:var(--ink-soft); letter-spacing:.04em}
+.awb .complete b{color:var(--ink)}
+
+/* Sections */
+.awb section{margin:24px 0}
+.awb .eyebrow{font-family:var(--mono); font-size:10.5px; letter-spacing:.26em; text-transform:uppercase; color:var(--accent); margin:0 0 8px}
+.awb .panel{background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); padding:18px 18px 20px}
+
+/* Setup grid */
+.awb .grid{display:grid; gap:14px 18px}
+.awb .setup-grid{grid-template-columns:repeat(2,1fr)}
+.awb .field{display:flex; flex-direction:column; gap:5px}
+.awb .field label{font-family:var(--mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft)}
+.awb .field input, .awb .field select{font-family:var(--body); font-size:14.5px; color:var(--ink); background:var(--paper2); border:1px solid var(--line); border-radius:9px; padding:9px 11px}
+.awb .field input:focus, .awb .field select:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(15,85,91,.12)}
+.awb .hint{grid-column:1/-1; font-size:13px; color:var(--ink-soft); background:var(--paper2); border:1px dashed var(--line); border-radius:9px; padding:10px 12px}
+.awb .hint b{color:var(--accent-ink)}
+
+/* Weights */
+.awb .weights-grid{grid-template-columns:repeat(4,1fr)}
+.awb .wcell{display:flex; flex-direction:column; gap:4px}
+.awb .wcell label{font-family:var(--mono); font-size:10px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.awb .winput{display:flex; align-items:center; gap:5px; background:var(--paper2); border:1px solid var(--line); border-radius:8px; padding:5px 9px}
+.awb .winput input{width:100%; border:none; background:transparent; font-family:var(--mono); font-size:14px; color:var(--ink); appearance:textfield; -moz-appearance:textfield}
+.awb .winput input::-webkit-outer-spin-button,.awb .winput input::-webkit-inner-spin-button{-webkit-appearance:none}
+.awb .winput input:focus{outline:none}
+.awb .winput .pct{font-family:var(--mono); font-size:12px; color:var(--ink-soft)}
+.awb .wsum{font-family:var(--mono); font-size:12px; color:var(--ink-soft); margin-top:12px}
+.awb .wsum b{color:var(--ink)} .awb .wsum.off b{color:var(--s1)}
+
+/* Controls */
+.awb .controls{display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:18px 0 6px}
+.awb .seg{display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden; background:var(--card)}
+.awb .seg button{font-family:var(--mono); font-size:11px; letter-spacing:.04em; padding:7px 12px; border:none; background:transparent; color:var(--ink-soft); cursor:pointer}
+.awb .seg button.on{background:var(--accent); color:#fff}
+.awb .seg button+button{border-left:1px solid var(--line)}
+.awb .btn{font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase; padding:8px 13px; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:9px; cursor:pointer}
+.awb .btn:hover{border-color:var(--accent)}
+.awb .btn.solid{background:var(--accent); color:#fff; border-color:var(--accent)}
+.awb .ctrl-label{font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-soft); margin-right:-4px}
+.awb .spacer{flex:1}
+.awb .filtersel{font-family:var(--mono); font-size:11px; padding:8px 10px; border:1px solid var(--line); border-radius:9px; background:var(--card); color:var(--ink)}
+
+/* Dimension */
+.awb .dim{background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); margin-bottom:14px; overflow:hidden}
+.awb .dim-head{display:flex; align-items:center; gap:14px; padding:15px 18px; cursor:pointer; user-select:none}
+.awb .dim-no{font-family:var(--disp); font-weight:600; font-size:15px; color:var(--accent); width:26px; flex:none}
+.awb .dim-name{font-family:var(--disp); font-weight:600; font-size:18px; letter-spacing:-.01em; flex:none}
+.awb .dim-weight{font-family:var(--mono); font-size:10.5px; color:var(--ink-soft); letter-spacing:.04em; background:var(--paper2); border:1px solid var(--line); border-radius:999px; padding:2px 8px}
+.awb .dim-bar{flex:1; height:7px; background:var(--line-soft); border-radius:999px; overflow:hidden; min-width:60px}
+.awb .dim-bar > i{display:block; height:100%; width:0; border-radius:999px; transition:width .25s ease}
+.awb .dim-score{font-family:var(--disp); font-weight:600; font-size:20px; font-variant-numeric:tabular-nums; width:64px; text-align:right; flex:none}
+.awb .dim-count{font-family:var(--mono); font-size:10px; color:var(--ink-soft); width:58px; text-align:right; flex:none}
+.awb .chev{flex:none; transition:transform .2s; color:var(--ink-soft)}
+.awb .dim.collapsed .chev{transform:rotate(-90deg)}
+.awb .dim.collapsed .dim-body{display:none}
+.awb .dim-body{border-top:1px solid var(--line-soft)}
+
+/* Item rows */
+.awb .item{display:grid; grid-template-columns:auto 1fr; gap:14px; padding:14px 18px; border-bottom:1px solid var(--line-soft)}
+.awb .item:last-child{border-bottom:none}
+.awb .item.na{opacity:.55}
+.awb .item.hidden{display:none}
+.awb .scorectl{display:flex; flex-direction:column; align-items:center; gap:6px; padding-top:2px}
+.awb .dots{display:flex; gap:4px}
+.awb .dot{width:24px; height:24px; border-radius:7px; border:1px solid var(--line); background:var(--paper2); color:var(--ink-soft); font-family:var(--mono); font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; transition:transform .08s}
+.awb .dot:hover{transform:translateY(-1px)}
+.awb .dot.sel{color:#fff; border-color:transparent; font-weight:600}
+.awb .na-btn{font-family:var(--mono); font-size:9.5px; letter-spacing:.08em; border:1px solid var(--line); background:transparent; color:var(--ink-soft); border-radius:6px; padding:3px 7px; cursor:pointer}
+.awb .na-btn.sel{background:var(--na); color:#fff; border-color:var(--na)}
+.awb .item-main{min-width:0}
+.awb .item-title{font-weight:600; font-size:15px; margin:0 0 2px}
+.awb .tags{display:inline-flex; gap:6px; margin-left:8px; vertical-align:middle}
+.awb .tag{font-family:var(--mono); font-size:8.5px; letter-spacing:.08em; text-transform:uppercase; padding:2px 6px; border-radius:5px; border:1px solid var(--line); color:var(--ink-soft)}
+.awb .tag.core{color:var(--accent); border-color:rgba(15,85,91,.35)}
+.awb .tag.adv{color:#8a6d1f; border-color:#d8c79a}
+.awb .item-desc{font-size:13.5px; color:var(--ink-soft); margin:1px 0 8px}
+.awb .kv{display:flex; gap:9px; flex-wrap:wrap; margin-bottom:8px}
+.awb .chip{font-family:var(--mono); font-size:11.5px; border-radius:8px; padding:5px 9px; border:1px solid var(--line); background:var(--paper2); display:inline-flex; gap:7px; align-items:center; max-width:100%}
+.awb .chip .lab{color:var(--accent); letter-spacing:.06em; font-size:9px; text-transform:uppercase; flex:none}
+.awb .chip .val{color:var(--ink); overflow:hidden; text-overflow:ellipsis}
+.awb .chip.verify{background:transparent; border-style:dashed}
+.awb .chip.verify .lab{color:#8a6d1f}
+.awb .note{width:100%; font-family:var(--body); font-size:13.5px; color:var(--ink); background:var(--paper2); border:1px solid var(--line); border-radius:9px; padding:8px 10px; resize:vertical; min-height:38px}
+.awb .note:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(15,85,91,.1)}
+.awb .note::placeholder{color:#a8a294}
+
+/* Rubric */
+.awb .rubric h3{font-family:var(--disp); font-weight:600; font-size:18px; margin:0 0 4px}
+.awb .rubric p{font-size:14px; color:var(--ink-soft); margin:6px 0}
+.awb .scale{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin:14px 0}
+.awb .scale .lvl{border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--paper2)}
+.awb .scale .lvl .n{font-family:var(--disp); font-weight:600; font-size:22px}
+.awb .scale .lvl .t{font-family:var(--mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase; margin:2px 0 4px}
+.awb .scale .lvl .d{font-size:12px; color:var(--ink-soft)}
+.awb .bands{display:flex; flex-wrap:wrap; gap:8px; margin:10px 0}
+.awb .bandkey{font-family:var(--mono); font-size:11px; padding:5px 10px; border-radius:999px; color:#fff}
+.awb .ruleblock{border-left:3px solid var(--accent); padding:4px 0 4px 14px; margin:14px 0}
+.awb .ruleblock b{font-family:var(--disp)}
+.awb .disc{font-size:12px; color:var(--ink-soft); border-top:1px solid var(--line-soft); padding-top:12px; margin-top:16px}
+
+.awb footer{padding:30px 0 50px; text-align:center}
+.awb footer .fm{font-family:var(--mono); font-size:10.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-soft)}
+
+/* Save indicator */
+.awb .saving{font-family:var(--mono); font-size:10.5px; letter-spacing:.04em; color:var(--ink-soft)}
+.awb .saving b{color:var(--accent)}
+
+@media (max-width:720px){
+  .awb .setup-grid{grid-template-columns:1fr} .awb .weights-grid{grid-template-columns:repeat(2,1fr)}
+  .awb .scale{grid-template-columns:1fr 1fr} .awb .scorebox .num{font-size:34px}
+  .awb .item{grid-template-columns:1fr} .awb .dim-name{font-size:16px}
+  .awb .dim-bar{display:none} .awb .dim-count{display:none}
+  .awb .ttl{font-size:18px}
+}
+
+/* Print */
+@media print{
+  body:has(.awb) aside{display:none !important}
+  .awb{background:#fff; background-image:none; font-size:11px}
+  .awb .topbar{position:static; background:#fff; -webkit-print-color-adjust:exact; print-color-adjust:exact}
+  .awb .controls,.awb .no-print,.awb .chev{display:none !important}
+  .awb .panel,.awb .dim{box-shadow:none; border-color:#ccc; break-inside:avoid}
+  .awb .dim.collapsed .dim-body{display:block !important}
+  .awb .item.hidden{display:grid !important}
+  .awb .item.na{display:none !important}
+  .awb .dot:not(.sel){display:none} .awb .dot.sel{print-color-adjust:exact; -webkit-print-color-adjust:exact}
+  .awb .na-btn:not(.sel){display:none}
+  .awb .note{min-height:auto; border-color:#ddd}
+  .awb .note:empty, .awb .note[data-empty="1"]{display:none}
+  .awb .band,.awb .bandkey,.awb .dim-bar > i,.awb .dot.sel{-webkit-print-color-adjust:exact; print-color-adjust:exact}
+  .awb a{color:#000}
+  .awb section{margin:12px 0}
+}

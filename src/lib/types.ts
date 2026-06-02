@@ -1,3 +1,5 @@
+import type { ManualAudit } from './audit-workbench'
+
 export type Lead = {
   id: string
   name: string
@@ -19,6 +21,9 @@ export type Lead = {
   digital_health_score: number | null
   audit_findings: AuditFindings | null
   audited_at: string | null
+  manual_audit: ManualAudit | null
+  manual_audit_score: number | null
+  manual_audited_at: string | null
   evaluation: string | null
   strategic_action: string | null
   potential: string | null
