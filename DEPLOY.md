@@ -102,46 +102,40 @@ npm run seed
 
 The auditor scores every lead's website 0–100 (Google PageSpeed Insights +
 on-page heuristics) and writes `digital_health_score`, `audit_findings`, and
-`audited_at`. It is a **local script** that talks directly to the database.
+`audited_at`.
 
-### Prerequisites (fresh machine)
+### Option A: Railway Cron Service (recommended)
 
-1. `git clone` this repo, then `pnpm install` (installs `tsx`, `pg`, `dotenv`).
-2. Create a **`.env.local`** in the repo root. ⚠️ This file is git-ignored, so it
-   is **NOT** in a fresh clone — you must recreate or copy it. For the audit you
-   only need two variables:
+Run the audit automatically on Railway as a scheduled cron job:
 
+1. In Railway dashboard, click **+ New → GitHub Repo** → select `raineylaguna-crm`.
+2. Name it **"Audit Cron"**.
+3. In Settings → Deploy → **Start Command:** `npm run audit`
+4. In Variables, click "Add Reference" and pull in `DATABASE_URL` from Postgres.
+5. Set `GOOGLE_PLACES_API_KEY` (or `GOOGLE_PAGESPEED_API_KEY`) as a variable.
+6. Go to Settings → Cron → **Add Cron Job**:
+   - Schedule: `0 2 * * *` (runs daily at 2 AM UTC)
+   - Command: `npm run audit`
+7. Deploy the service.
+
+The audit will run daily at 2 AM UTC, auditing all leads with websites that haven't been audited yet. It's idempotent and resumable — safe to re-run.
+
+### Option B: Local Script (manual)
+
+For one-off audits from your laptop:
+
+1. Create a **`.env.local`** in the repo root with:
    ```
-   # Railway Postgres PUBLIC connection string:
-   #   Railway → Postgres service → Connect → "Public Network".
-   #   Use the *.proxy.rlwy.net host — the *.railway.internal URL only works
-   #   from inside Railway, not from your laptop.
    DATABASE_URL=postgresql://USER:PASSWORD@HOST.proxy.rlwy.net:PORT/railway
-
-   # An API key with "PageSpeed Insights API" enabled in its API restrictions
-   # (Google Cloud → Credentials → your key → API restrictions).
    GOOGLE_PLACES_API_KEY=AIza...
    ```
-
-### Commands (from the repo root)
-
-```powershell
-# 1) Dry run — NO DB writes, prints scores for 20 sites (sanity check first)
-npx tsx scripts/audit-sites.ts --dry-run --limit 20 --with-website
-
-# 2) Full sweep — audits every lead that has a website and isn't audited yet
-npx tsx scripts/audit-sites.ts --with-website --concurrency 12
-```
-
-- **Idempotent / resumable:** only audits rows where `audited_at IS NULL`, and
-  each lead commits as it finishes — safe to Ctrl-C and re-run to continue.
-- **Flags:** `--limit N`, `--district "Miraflores"`, `--concurrency N`,
-  `--force` (re-audit everything for a freshness sweep), `--dry-run`.
-- The full ~8k sites takes roughly **2.5–3.5 hours**.
+2. Run:
+   ```powershell
+   npx tsx scripts/audit-sites.ts --with-website --concurrency 12
+   ```
 
 > The in-app **Run audit** button (lead detail page) instead needs
-> `GOOGLE_PLACES_API_KEY` set on the Railway **Web** service Variables — the
-> batch script above does not.
+> `GOOGLE_PLACES_API_KEY` set on the Railway **Web** service Variables.
 
 ---
 

@@ -12,6 +12,7 @@
     "worker": "tsx scripts/outreach-worker.ts",
     "migrate": "tsx scripts/migrate.ts",
     "draft-outreach-cron": "tsx scripts/draft-outreach-cron.ts",
+    "audit": "tsx scripts/audit-sites.ts --with-website --concurrency 12",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
