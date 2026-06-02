@@ -106,19 +106,26 @@ on-page heuristics) and writes `digital_health_score`, `audit_findings`, and
 
 ### Option A: Railway Cron Service (recommended)
 
-Run the audit automatically on Railway as a scheduled cron job:
+Run discovery + audit automatically on Railway as a scheduled cron job:
 
 1. In Railway dashboard, click **+ New → GitHub Repo** → select `raineylaguna-crm`.
 2. Name it **"Audit Cron"**.
-3. In Settings → Deploy → **Start Command:** `npm run audit`
+3. In Settings → Deploy → **Start Command:** `npm run audit:full`
 4. In Variables, click "Add Reference" and pull in `DATABASE_URL` from Postgres.
 5. Set `GOOGLE_PLACES_API_KEY` (or `GOOGLE_PAGESPEED_API_KEY`) as a variable.
 6. Go to Settings → Cron → **Add Cron Job**:
    - Schedule: `0 2 * * *` (runs daily at 2 AM UTC)
-   - Command: `npm run audit`
+   - Command: `npm run audit:full`
 7. Deploy the service.
 
-The audit will run daily at 2 AM UTC, auditing all leads with websites that haven't been audited yet. It's idempotent and resumable — safe to re-run.
+Each run first sweeps all 43 Lima districts × 11 niches via Google Places to
+discover **new businesses** (`npm run discover`), then audits every lead with a
+website that hasn't been audited yet (`npm run audit`). Both steps are
+idempotent and resumable — discovery dedupes on `google_place_id`, and the
+auditor only touches rows where `audited_at IS NULL`. Safe to re-run.
+
+> **Just audit, no discovery?** Use `npm run audit` instead.
+> **Just discovery?** Use `npm run discover`.
 
 ### Option B: Local Script (manual)
 
