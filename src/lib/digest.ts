@@ -24,6 +24,7 @@ export type DigestLead = {
   potential: string | null
   pipeline_stage: string
   notes: string | null
+  website_url: string | null
   last_outreach_at: string | null
   days_since_outreach: number | null
 }
@@ -57,7 +58,7 @@ export async function loadDigest(pool: Pool): Promise<DigestData> {
          FROM crm_outreach_events
          GROUP BY lead_id
        )
-       SELECT l.id, l.name, l.district, l.niche, l.potential, l.pipeline_stage, l.notes,
+       SELECT l.id, l.name, l.district, l.niche, l.potential, l.pipeline_stage, l.notes, l.website_url,
               lo.last_at::text AS last_outreach_at,
               EXTRACT(DAY FROM NOW() - lo.last_at)::int AS days_since_outreach
        FROM crm_leads l
@@ -69,7 +70,7 @@ export async function loadDigest(pool: Pool): Promise<DigestData> {
        LIMIT 10`,
     ),
     pool.query<DigestLead>(
-      `SELECT id, name, district, niche, potential, pipeline_stage, notes,
+      `SELECT id, name, district, niche, potential, pipeline_stage, notes, website_url,
               NULL::text AS last_outreach_at, NULL::int AS days_since_outreach
        FROM crm_leads
        WHERE deleted_at IS NULL

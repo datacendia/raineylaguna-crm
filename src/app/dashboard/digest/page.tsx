@@ -13,6 +13,7 @@
  */
 import pool from '@/lib/db'
 import { loadDigest, type DigestLead } from '@/lib/digest'
+import PotentialCell from './PotentialCell'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -149,7 +150,9 @@ function LeadTable({ leads, showDays = false }: { leads: DigestLead[]; showDays?
                   {l.days_since_outreach == null ? '—' : `${l.days_since_outreach}d`}
                 </td>
               )}
-              <td className="px-3 py-2 text-gray-600">{l.potential ?? '—'}</td>
+              <td className="px-3 py-2">
+                <PotentialCell leadId={l.id} potential={l.potential} hasSite={Boolean(l.website_url)} />
+              </td>
             </tr>
           ))}
         </tbody>
