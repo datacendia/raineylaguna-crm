@@ -21,12 +21,26 @@
 > migrated to ESLint 9 flat config. Effective completion ~80%,
 > remaining CRITICAL: #1 (drafts UI), #2 (bulk-import UI),
 > #3 (Sereno cross-ref), #4 (`/dashboard/morning`), #5 (TOTP).
+>
+> **Reconciliation 2026-06-02:** Large completeness milestone shipped.
+> CRITICAL #1 (drafts review queue at `/dashboard/drafts` + real send),
+> #3 (Sereno cross-reference sync + list/detail badges) and #5 (TOTP 2FA —
+> `src/lib/totp.ts`, login + `/dashboard/security` enrol) are now **done**.
+> POLISH #9 (mobile pipeline), #10 (priority-score weights centralised +
+> `CRM_PRIORITY_WEIGHTS` override), #11 (inbound-email webhook), #12
+> (quiet-hours scheduling), #15 (soft-delete + restore), #16 (CSV export)
+> shipped. Also: email outreach via Resend, a unified outreach dispatcher,
+> Twilio StatusCallback delivery/read tracking, a global tags API + UI, the
+> digest auto-email cron, a Redis-backed rate limiter (in-process fallback),
+> and a `/api/health` service-presence map. Remaining CRITICAL: #2
+> (bulk-import UI) and #4 (`/dashboard/morning`, partially covered by
+> `/dashboard/digest`). Effective completion ~95%.
 
 ---
 
 ## CRITICAL — blocking 100%
 
-### 1. AI draft review queue UI
+### ~~1. AI draft review queue UI~~ ✅ shipped (`/dashboard/drafts` — list, inline edit, real Send via the unified dispatcher, Discard)
 - **Why:** AI-generated outreach drafts are persisted in
   `outreach_drafts` (or equivalent) but there's no UI to review,
   edit, and send. They accumulate unused.
@@ -42,7 +56,7 @@
   POSTs to the existing endpoint.
 - **Effort:** 4 hours.
 
-### 3. Sereno customer cross-reference
+### ~~3. Sereno customer cross-reference~~ ✅ shipped (`scripts/sync-sereno-customers.ts` matches vigia customer emails → `crm_leads.sereno_customer`; badge on the leads list + detail page)
 - **Why:** The single most important business question — *"of the
   audits we ran last month, who became a Sereno customer?"* —
   currently requires manually joining two databases.
@@ -65,7 +79,7 @@
   Renders as a vertical brief. Mirror the Sereno brief layout.
 - **Effort:** 1 day.
 
-### 5. Two-factor authentication on `/login` ⚠️ still open — commit `26367f5` referenced this number but only shipped #6 + #8; no `otplib` or TOTP code present
+### ~~5. Two-factor authentication on `/login`~~ ✅ shipped (`src/lib/totp.ts` via otplib; enrol at `/dashboard/security` with a QR code; login adds a 6-digit field; attempts rate-limited)
 - **Why:** `bcryptjs` is good but no TOTP. A leaked password is a
   full compromise. Adding TOTP eliminates the most common attack.
 - **How:** `otplib` + a `crm_users.totp_secret` column. Setup flow at
@@ -101,13 +115,13 @@
 
 ## POLISH — non-blocking
 
-### 9. Mobile-friendly pipeline view
+### ~~9. Mobile-friendly pipeline view~~ ✅ shipped (swipeable horizontal snap-kanban on mobile + per-card stage `<select>` for touch; 5-col grid on desktop)
 - **Why:** `/dashboard/pipeline` is desktop-only. A horizontal
   kanban-style table breaks on phones.
 - **How:** On `<md`, collapse columns into a vertical accordion.
 - **Effort:** 3 hours.
 
-### 10. Priority-score formula tuning
+### ~~10. Priority-score formula tuning (centralise + document)~~ ✅ weights centralised in `DEFAULT_WEIGHTS` with a `CRM_PRIORITY_WEIGHTS` env override (`src/lib/priority-score.ts`); regression re-weighting still awaits real conversion data
 - **Why:** `priority-score.test.ts` covers a stub. The weights are
   guesses until real conversion data informs them.
 - **How:** Once 30+ leads have converted, run a regression to
@@ -115,7 +129,7 @@
   `src/lib/priority-score.ts` so they're easy to revisit.
 - **Effort:** ~ongoing; 1 hour to document.
 
-### 11. Email-forwarding inbound (lead from email)
+### ~~11. Email-forwarding inbound (lead from email)~~ ✅ shipped (`POST /api/webhooks/inbound-email` — matches the sender to a lead, appends the reply to notes, marks the latest outreach event Replied)
 - **Why:** Replies to outreach end up in your personal inbox, not the
   CRM. Forward-to-CRM is the standard pattern.
 - **How:** Cloudflare Email Routing (free) → Email Worker → POST to
@@ -123,7 +137,7 @@
   email match. No paid Mailgun / SendGrid needed.
 - **Effort:** 1 day.
 
-### 12. Outreach send-time hygiene
+### ~~12. Outreach send-time hygiene~~ ✅ shipped (`src/lib/schedule.ts` clamps batch sends into 09:00–18:00 Lima and spreads them across the window)
 - **Why:** Sending an outreach email at 23:47 looks desperate. Should
   queue overnight sends for 09:00 Lima.
 - **How:** New `outreach_queue` table; cron checks every 5 min,
@@ -142,14 +156,14 @@
 - **How:** Wrap each `route.ts` `try/catch`.
 - **Effort:** 3 hours.
 
-### 15. Soft-delete leads
+### ~~15. Soft-delete leads~~ ✅ shipped (`crm_leads.deleted_at`; list/stats/digest/cron filter it out; DELETE soft-deletes, `PATCH {restore:true}` restores; detail-page banner)
 - **Why:** Hard delete loses history; soft delete via
   `deleted_at` lets us recover and audit.
 - **How:** `crm_leads.deleted_at` column; all queries filter `WHERE
   deleted_at IS NULL`.
 - **Effort:** 2 hours.
 
-### 16. CSV export of pipeline
+### ~~16. CSV export of pipeline~~ ✅ shipped (`GET /api/leads/export` streams a filtered CSV with a UTF-8 BOM; Export button on the leads list)
 - **Why:** Mid-quarter operator review reads better in a spreadsheet.
 - **How:** `/dashboard/pipeline/export.csv` server route, streams a
   filtered query.
@@ -169,7 +183,7 @@
   matching lead; surfaces in the morning brief.
 - **Effort:** 2 days, split between both repos.
 
-### 18. WhatsApp Business outreach via existing Twilio
+### ~~18. WhatsApp Business outreach via existing Twilio~~ ✅ shipped (unified dispatcher `src/lib/outreach-send.ts` sends WhatsApp via Twilio + Email via Resend; Instagram DM / LinkedIn are manual channels)
 - **Why:** Email outreach has 12% open rate; WhatsApp first-message
   open rate in Peru is 90%+.
 - **How:** Reuse the Twilio account already wired in vigia. CRM

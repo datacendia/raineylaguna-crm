@@ -12,6 +12,8 @@
     "worker": "tsx scripts/outreach-worker.ts",
     "migrate": "tsx scripts/migrate.ts",
     "draft-outreach-cron": "tsx scripts/draft-outreach-cron.ts",
+    "sync-sereno": "tsx scripts/sync-sereno-customers.ts",
+    "digest-email": "tsx scripts/digest-email-cron.ts",
     "discover": "tsx scripts/discover-places.ts --max-pages 2",
     "audit": "tsx scripts/audit-sites.ts --with-website --concurrency 12",
     "audit:full": "npm run discover && npm run audit",

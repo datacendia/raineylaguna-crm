@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifySession } from '@/lib/auth'
 import { findUserById, confirmTotpEnrollment, disableTotp } from '@/lib/users'
 import { verifyCode } from '@/lib/totp'
-import { createRateLimiter, ipFromHeaders } from '@/lib/rate-limit'
+import { createDistributedRateLimiter, ipFromHeaders } from '@/lib/rate-limit'
 
-// 5 bad codes / IP / 15 min while enrolling.
-const enrolLimiter = createRateLimiter({ windowMs: 15 * 60_000, max: 5 })
+// 5 bad codes / IP / 15 min while enrolling. Redis-backed when REDIS_URL is set.
+const enrolLimiter = createDistributedRateLimiter('totp-enrol', { windowMs: 15 * 60_000, max: 5 })
 
 /**
  * Confirm TOTP enrolment.
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   }
 
   const ip = ipFromHeaders(request.headers)
-  const rl = enrolLimiter.check(`${ip}:${session.uid}`)
+  const rl = await enrolLimiter.check(`${ip}:${session.uid}`)
   if (!rl.ok) {
     await disableTotp(session.uid)
     return NextResponse.json(

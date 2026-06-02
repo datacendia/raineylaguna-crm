@@ -23,9 +23,11 @@ export default function DashboardLayout({
           <Link href="/dashboard/leads" className="block hover:text-vermilion">Leads</Link>
           <Link href="/dashboard/pipeline" className="block hover:text-vermilion">Pipeline</Link>
           <Link href="/dashboard/outreach" className="block hover:text-vermilion">Outreach</Link>
+          <Link href="/dashboard/drafts" className="block hover:text-vermilion">Draft queue</Link>
           <Link href="/dashboard/video-audits" className="block hover:text-vermilion">Video Audits</Link>
           <Link href="/dashboard/batch" className="block hover:text-vermilion">Batch Outreach</Link>
           <Link href="/dashboard/security" className="block hover:text-vermilion">Security</Link>
+          <Link href="/dashboard/guide" className="block hover:text-vermilion">Guide</Link>
         </nav>
         <button onClick={logout} className="text-left text-sm text-gray-400 hover:text-vermilion">
           Logout

@@ -6,6 +6,8 @@ export type ScriptTemplate = {
   channel: 'Email' | 'Instagram DM' | 'WhatsApp' | 'LinkedIn'
   matches: (lead: Lead) => boolean
   render: (lead: Lead) => string
+  /** Email subject line. Only used when channel === 'Email'. */
+  subject?: (lead: Lead) => string
 }
 
 export const SCRIPT_TEMPLATES: ScriptTemplate[] = [
@@ -29,6 +31,7 @@ Would you be open to seeing a quick prototype of what a custom, commission-free 
     label: 'Legal · Authority & Security (Email / LinkedIn)',
     channel: 'Email',
     matches: (l) => l.niche === 'Professional Services',
+    subject: (l) => `${l.name}: auditoría breve de su sitio web`,
     render: (l) => `Estimado equipo de ${l.name},
 
 I am reaching out because while researching top-tier legal representation in ${l.district}, I came across your firm. However, I noticed that your current website ${
@@ -84,6 +87,7 @@ En Rainey Laguna Studios construimos sitios con motor de citas integrado para sa
     label: 'Fitness · Membership Portal (Email)',
     channel: 'Email',
     matches: (l) => l.niche === 'Fitness',
+    subject: (l) => `${l.name}: portal de reservas y membresías`,
     render: (l) => `Hi ${l.name} team,
 
 I was looking at fitness studios in ${l.district} and your community stands out. The gap I noticed: members can't easily check class schedules or manage memberships from your current ${

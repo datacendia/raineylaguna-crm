@@ -12,96 +12,13 @@
  * curl this page with auth and email the rendered HTML to the operator.
  */
 import pool from '@/lib/db'
+import { loadDigest, type DigestLead } from '@/lib/digest'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-type Counts = { added: number; outreach: number; wins: number; proposals_out: number }
-type Lead = {
-  id: string
-  name: string
-  district: string
-  niche: string
-  potential: string | null
-  pipeline_stage: string
-  notes: string | null
-  last_outreach_at: string | null
-  days_since_outreach: number | null
-}
-type ChannelCount = { channel: string; n: number }
-type Win = { id: string; name: string; district: string; updated_at: string }
-
-async function loadDigest() {
-  // "This week" = since the most recent Monday 00:00 in Lima time (UTC-5).
-  // SQL approximation: midnight UTC of the most recent Monday, shifted by 5 hours.
-  const sinceMon = `date_trunc('week', NOW() AT TIME ZONE 'America/Lima')`
-
-  const [counts, cold, topPotential, channels, wins] = await Promise.all([
-    pool.query<Counts>(
-      `SELECT
-         (SELECT COUNT(*)::int FROM crm_leads WHERE created_at >= ${sinceMon}) AS added,
-         (SELECT COUNT(*)::int FROM crm_outreach_events WHERE created_at >= ${sinceMon}) AS outreach,
-         (SELECT COUNT(*)::int FROM crm_leads WHERE pipeline_stage = 'Closed' AND updated_at >= ${sinceMon}) AS wins,
-         (SELECT COUNT(*)::int FROM crm_leads WHERE pipeline_stage = 'Proposal') AS proposals_out`
-    ),
-    pool.query<Lead>(
-      `WITH last_out AS (
-         SELECT lead_id, MAX(created_at) AS last_at
-         FROM crm_outreach_events
-         GROUP BY lead_id
-       )
-       SELECT l.id, l.name, l.district, l.niche, l.potential, l.pipeline_stage, l.notes,
-              lo.last_at::text AS last_outreach_at,
-              EXTRACT(DAY FROM NOW() - lo.last_at)::int AS days_since_outreach
-       FROM crm_leads l
-       LEFT JOIN last_out lo ON lo.lead_id = l.id
-       WHERE l.pipeline_stage IN ('Contacted', 'Audited', 'Proposal')
-         AND (lo.last_at IS NULL OR lo.last_at < NOW() - INTERVAL '14 days')
-       ORDER BY lo.last_at NULLS FIRST
-       LIMIT 10`
-    ),
-    pool.query<Lead>(
-      `SELECT id, name, district, niche, potential, pipeline_stage, notes,
-              NULL::text AS last_outreach_at, NULL::int AS days_since_outreach
-       FROM crm_leads
-       WHERE pipeline_stage = 'Lead'
-         AND id NOT IN (SELECT DISTINCT lead_id FROM crm_outreach_events)
-         AND potential IS NOT NULL
-       ORDER BY
-         CASE potential
-           WHEN 'High' THEN 1 WHEN 'Alta' THEN 1
-           WHEN 'Medium' THEN 2 WHEN 'Media' THEN 2
-           ELSE 3
-         END,
-         created_at ASC
-       LIMIT 10`
-    ),
-    pool.query<ChannelCount>(
-      `SELECT channel::text, COUNT(*)::int AS n
-       FROM crm_outreach_events
-       WHERE created_at >= ${sinceMon}
-       GROUP BY channel
-       ORDER BY n DESC`
-    ),
-    pool.query<Win>(
-      `SELECT id, name, district, updated_at::text
-       FROM crm_leads
-       WHERE pipeline_stage = 'Closed' AND updated_at >= ${sinceMon}
-       ORDER BY updated_at DESC`
-    ),
-  ])
-
-  return {
-    counts: counts.rows[0] ?? { added: 0, outreach: 0, wins: 0, proposals_out: 0 },
-    cold: cold.rows,
-    topPotential: topPotential.rows,
-    channels: channels.rows,
-    wins: wins.rows,
-  }
-}
-
 export default async function DigestPage() {
-  const { counts, cold, topPotential, channels, wins } = await loadDigest()
+  const { counts, cold, topPotential, channels, wins } = await loadDigest(pool)
   const today = new Date().toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
@@ -202,7 +119,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="text-xl font-bold mb-3 print:mb-2">{children}</h2>
 }
 
-function LeadTable({ leads, showDays = false }: { leads: Lead[]; showDays?: boolean }) {
+function LeadTable({ leads, showDays = false }: { leads: DigestLead[]; showDays?: boolean }) {
   return (
     <div className="border rounded-lg overflow-hidden">
       <table className="w-full text-sm">

@@ -62,7 +62,18 @@ function initItems(initial: ManualAudit | null): Items {
   if (initial?.items) {
     for (const id of Object.keys(m)) {
       const rec = initial.items[id]
-      if (rec) m[id] = { state: rec.state ?? null, note: rec.note ?? '', touched: (rec.state ?? null) !== null, auto: false }
+      if (rec) {
+        const state = rec.state ?? null
+        m[id] = {
+          state,
+          note: rec.note ?? '',
+          // Honour persisted provenance; fall back to inference for legacy
+          // snapshots (saved before these flags existed) so old audits still
+          // load sensibly and an auto-N/A can be re-scoped when relevant again.
+          touched: typeof rec.touched === 'boolean' ? rec.touched : state !== null,
+          auto: typeof rec.auto === 'boolean' ? rec.auto : false,
+        }
+      }
     }
   }
   return m
@@ -95,7 +106,12 @@ function recomputeApplicability(items: Items, profile: ProfileId, presenceOnly: 
 
 function recordView(items: Items): Record<string, ItemRecord> {
   const m: Record<string, ItemRecord> = {}
-  for (const id of Object.keys(items)) m[id] = { state: items[id].state, note: items[id].note }
+  for (const id of Object.keys(items)) {
+    const it = items[id]
+    // Persist provenance alongside state/note so auto-N/A vs. user-set
+    // survives a reload (computeOverall ignores these extra fields).
+    m[id] = { state: it.state, note: it.note, touched: it.touched, auto: it.auto }
+  }
   return m
 }
 

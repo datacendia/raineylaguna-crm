@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import type { Lead } from './types'
-import { computePriorityScore, bandColor } from './priority-score'
+import { computePriorityScore, bandColor, getPriorityWeights, DEFAULT_WEIGHTS } from './priority-score'
 
 /**
  * Tests for the Smart Prioritization Score.
@@ -43,6 +43,9 @@ const baseLead = (overrides: Partial<Lead> = {}): Lead => ({
   notes: null,
   next_action: null,
   snoozed_until: null,
+  sereno_customer: false,
+  sereno_checked_at: null,
+  deleted_at: null,
   created_at: NOW.toISOString(),
   updated_at: NOW.toISOString(),
   ...overrides,
@@ -191,5 +194,41 @@ describe('bandColor', () => {
       expect(c.bg).toMatch(/^bg-/)
       expect(c.text).toMatch(/^text-/)
     }
+  })
+})
+
+describe('getPriorityWeights (CRM_PRIORITY_WEIGHTS override)', () => {
+  afterEach(() => {
+    delete process.env.CRM_PRIORITY_WEIGHTS
+    // Re-resolve so the memoised value returns to defaults for other suites.
+    getPriorityWeights()
+  })
+
+  it('returns defaults when the env var is unset', () => {
+    delete process.env.CRM_PRIORITY_WEIGHTS
+    expect(getPriorityWeights()).toEqual(DEFAULT_WEIGHTS)
+  })
+
+  it('deep-merges a partial override over defaults', () => {
+    process.env.CRM_PRIORITY_WEIGHTS = JSON.stringify({
+      niche: { weights: { Automotive: 30 } },
+      bands: { critico: 80 },
+    })
+    const w = getPriorityWeights()
+    expect(w.niche.weights.Automotive).toBe(30)
+    // Untouched niche weights remain at their defaults.
+    expect(w.niche.weights['Beauty & Wellness']).toBe(25)
+    expect(w.bands.critico).toBe(80)
+    expect(w.recency.max).toBe(DEFAULT_WEIGHTS.recency.max)
+
+    // The override actually changes a computed score.
+    const ps = computePriorityScore(baseLead({ niche: 'Automotive' }), NOW)
+    expect(ps.breakdown.niche).toBe(30)
+  })
+
+  it('falls back to defaults on malformed JSON without throwing', () => {
+    process.env.CRM_PRIORITY_WEIGHTS = '{ not valid json'
+    expect(() => getPriorityWeights()).not.toThrow()
+    expect(getPriorityWeights()).toEqual(DEFAULT_WEIGHTS)
   })
 })

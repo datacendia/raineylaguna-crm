@@ -4,7 +4,14 @@
  * Mirror of vigiaV2 src/lib/rate-limit.ts. Used by /api/auth/login to
  * blunt credential stuffing. Single-process, single-region; if we scale
  * horizontally this needs to move to a shared store.
+ *
+ * For horizontal scaling, `createDistributedRateLimiter()` backs the same
+ * window with Redis (atomic INCR + PEXPIRE) when REDIS_URL is set, and falls
+ * back to the in-process map per-call if Redis is briefly unreachable.
  */
+
+import { serverEnv } from './env'
+import type { Redis } from 'ioredis'
 
 export interface RateLimitOptions {
   windowMs?: number;
@@ -44,6 +51,81 @@ export function createRateLimiter(opts: RateLimitOptions = {}) {
   }
 
   return { check, reset };
+}
+
+export interface DistributedRateLimiter {
+  check(key: string): Promise<RateLimitResult>;
+  reset(): Promise<void>;
+  /** Which backend is active: 'redis' when REDIS_URL is set, else 'memory'. */
+  backend(): 'redis' | 'memory';
+}
+
+async function getRedis(): Promise<Redis | null> {
+  // Dynamic import keeps bullmq/ioredis out of this low-level module's static
+  // graph (so edge bundles and unit tests don't pull the queue eagerly).
+  const mod = await import('./queue');
+  return mod.getRedisConnection();
+}
+
+async function redisCheck(
+  redis: Redis,
+  key: string,
+  windowMs: number,
+  max: number,
+): Promise<RateLimitResult> {
+  // Fixed-window counter. INCR is atomic; the first hit in a window sets the
+  // TTL so the key self-expires.
+  const count = await redis.incr(key);
+  let ttl: number;
+  if (count === 1) {
+    await redis.pexpire(key, windowMs);
+    ttl = windowMs;
+  } else {
+    ttl = await redis.pttl(key);
+    if (ttl < 0) {
+      await redis.pexpire(key, windowMs);
+      ttl = windowMs;
+    }
+  }
+  const resetAt = Date.now() + ttl;
+  if (count > max) return { ok: false, remaining: 0, resetAt };
+  return { ok: true, remaining: Math.max(0, max - count), resetAt };
+}
+
+/**
+ * Rate limiter that prefers a shared Redis store (so limits hold across every
+ * server instance) and degrades to the in-process limiter when REDIS_URL is
+ * unset or Redis is momentarily unreachable. `name` namespaces the Redis keys
+ * (e.g. 'login', 'totp') so independent limiters never collide.
+ */
+export function createDistributedRateLimiter(
+  name: string,
+  opts: RateLimitOptions = {},
+): DistributedRateLimiter {
+  const windowMs = opts.windowMs ?? 60_000;
+  const max = opts.max ?? 5;
+  const memory = createRateLimiter({ windowMs, max });
+  const useRedis = Boolean(serverEnv.REDIS_URL);
+  const prefix = `rl:${name}:`;
+
+  async function check(key: string): Promise<RateLimitResult> {
+    if (useRedis) {
+      try {
+        const redis = await getRedis();
+        if (redis) return await redisCheck(redis, prefix + key, windowMs, max);
+      } catch {
+        // Redis hiccup → fall back to the in-process limiter for this call.
+      }
+    }
+    return memory.check(key);
+  }
+
+  async function reset(): Promise<void> {
+    memory.reset();
+    // Redis keys expire on their own; no explicit flush needed.
+  }
+
+  return { check, reset, backend: () => (useRedis ? 'redis' : 'memory') };
 }
 
 export function ipFromHeaders(headers: { get(name: string): string | null }): string {

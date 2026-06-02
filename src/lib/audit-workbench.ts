@@ -31,7 +31,18 @@ export type WorkbenchDimension = { id: DimensionId; name: string; items: Workben
 
 /** 0-4 score, 'na' (not applicable) or null (unscored). */
 export type ItemState = number | 'na' | null
-export type ItemRecord = { state: ItemState; note: string }
+export type ItemRecord = {
+  state: ItemState
+  note: string
+  /**
+   * UI provenance, persisted so the distinction between an auto-applied N/A
+   * (out-of-scope for the chosen business model) and a value the auditor set
+   * by hand survives reloads. Optional for backward-compat with snapshots
+   * saved before these flags existed.
+   */
+  touched?: boolean
+  auto?: boolean
+}
 export type Weights = Record<DimensionId, number>
 
 export type ManualAuditEngagement = { client: string; url: string; auditor: string; date: string }

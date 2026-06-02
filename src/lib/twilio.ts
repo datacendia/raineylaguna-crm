@@ -56,7 +56,8 @@ export function normalizeWhatsappNumber(s: string): string {
 export async function sendWhatsapp(
   cfg: TwilioConfig,
   to: string,
-  body: string
+  body: string,
+  statusCallback?: string
 ): Promise<SendResult> {
   const params = new URLSearchParams()
   params.set('To', normalizeWhatsappNumber(to))
@@ -67,6 +68,9 @@ export async function sendWhatsapp(
   } else {
     params.set('Body', body)
   }
+  // Twilio will POST delivery/read updates to this URL (see
+  // /api/webhooks/twilio). Only set when a public base URL + token exist.
+  if (statusCallback) params.set('StatusCallback', statusCallback)
 
   const url = `https://api.twilio.com/2010-04-01/Accounts/${cfg.accountSid}/Messages.json`
   const auth = Buffer.from(`${cfg.accountSid}:${cfg.authToken}`).toString('base64')

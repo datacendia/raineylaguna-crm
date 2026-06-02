@@ -5,18 +5,13 @@ top. Close by removing or striking through and dating the fix.
 
 ---
 
-## raineylaguna-crm-L01 — `next lint` removed in Next 16
+## ~~raineylaguna-crm-L01 — `next lint` removed in Next 16~~ ✅ FIXED 2026-06-02
 
-**Status:** Open. 2026-05-08.
+**Status:** Fixed 2026-06-02. `eslint.config.mjs` (ESLint 9 flat config) is in
+place and `package.json` `lint` runs `eslint .` directly; CI lints on every PR.
 
-**Symptom:** `next lint` was removed in Next 16.x. Running it produces
+**Symptom (historical):** `next lint` was removed in Next 16.x and produced
 `Invalid project directory provided, no such directory: …/lint`.
-
-**Mitigation:** `package.json` `lint` script currently echoes a
-deprecation notice.
-
-**Fix:** Run `npx @next/codemod@canary next-lint-to-eslint-cli .` to
-scaffold `eslint.config.mjs`, then flip the script back to `eslint .`.
 
 ---
 

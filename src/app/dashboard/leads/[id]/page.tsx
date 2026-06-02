@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { STAGES, CHANNELS, type Lead, type OutreachEvent, type OutreachDraft, type VideoAudit } from '@/lib/types'
 import ScriptPanel from '@/components/ScriptPanel'
+import TagEditor from '@/components/TagEditor'
 import { googleMapsUrl, googleMapsEmbedUrl } from '@/lib/maps'
 import { healthColor, severityColor } from '@/lib/audit'
 
@@ -185,9 +186,18 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   const remove = async () => {
-    if (!confirm('Delete this lead permanently?')) return
+    if (!confirm('Delete this lead? It will be hidden from lists but can be restored.')) return
     await fetch(`/api/leads/${id}`, { method: 'DELETE' })
     router.push('/dashboard/leads')
+  }
+
+  const restore = async () => {
+    await fetch(`/api/leads/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ restore: true }),
+    })
+    load()
   }
 
   if (!data) return <div className="p-8">Loading…</div>
@@ -199,6 +209,14 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
       <div className="flex justify-between items-start mt-2 mb-6">
         <div>
           <h1 className="text-4xl font-bold">{lead.name}</h1>
+          {lead.sereno_customer && (
+            <span
+              className="inline-block mt-2 text-xs uppercase tracking-wide bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded"
+              title={lead.sereno_checked_at ? `Verified ${new Date(lead.sereno_checked_at).toLocaleDateString()}` : 'Converted to a Sereno customer'}
+            >
+              ★ Sereno customer
+            </span>
+          )}
           {lead.source && (
             <p className="text-xs text-gray-400 font-mono mt-1">via {lead.source}</p>
           )}
@@ -298,6 +316,17 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
           )}
           <button onClick={remove} className="px-3 py-1 border border-red-300 text-red-600 rounded">Delete</button>
         </div>
+      </div>
+
+      {lead.deleted_at && (
+        <div className="mb-6 flex items-center justify-between gap-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span>This lead is deleted (since {new Date(lead.deleted_at).toLocaleDateString()}) and hidden from lists.</span>
+          <button onClick={restore} className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded">Restore</button>
+        </div>
+      )}
+
+      <div className="bg-white rounded-lg shadow p-4 mb-6">
+        <TagEditor leadId={id} />
       </div>
 
       <div className="bg-white rounded-lg shadow p-6 mb-6">

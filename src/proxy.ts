@@ -18,6 +18,12 @@ import { serverEnv } from '@/lib/env'
  *     `lastSeenAt` bumped to now. This is what gives the operator
  *     a continuous 30-day session as long as they remain active.
  */
+// Genuinely public, secret-authenticated API paths that must bypass the
+// session gate. Each enforces its own shared-secret check internally. (Public
+// webhooks live under /api/webhooks/* which is intentionally outside the
+// matcher below, so they never reach this gate at all.)
+const PUBLIC_API_PATHS = new Set(['/api/leads/public'])
+
 export async function proxy(request: NextRequest) {
   const token = request.cookies.get('crm_auth')?.value
   const session = await verifySession(token)
@@ -25,8 +31,9 @@ export async function proxy(request: NextRequest) {
   const isLoginPage = path === '/login'
   const isApi = path.startsWith('/api/')
   const isAuthApi = path.startsWith('/api/auth/')
+  const isPublicApi = PUBLIC_API_PATHS.has(path)
 
-  if (!session && !isLoginPage && !isAuthApi) {
+  if (!session && !isLoginPage && !isAuthApi && !isPublicApi) {
     if (isApi) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     return NextResponse.redirect(new URL('/login', request.url))
   }
@@ -58,5 +65,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/login', '/api/leads/:path*', '/api/outreach/:path*', '/api/video-audits/:path*', '/api/import', '/api/stats', '/api/batch'],
+  matcher: ['/dashboard/:path*', '/login', '/api/leads/:path*', '/api/outreach/:path*', '/api/video-audits/:path*', '/api/import', '/api/stats', '/api/batch', '/api/drafts', '/api/drafts/:path*'],
 }

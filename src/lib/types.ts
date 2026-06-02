@@ -31,6 +31,9 @@ export type Lead = {
   notes: string | null
   next_action: string | null
   snoozed_until: string | null
+  sereno_customer: boolean
+  sereno_checked_at: string | null
+  deleted_at: string | null
   created_at: string
   updated_at: string
 }
@@ -43,6 +46,12 @@ export type OutreachEvent = {
   scheduled_for: string | null
   sent_at: string | null
   notes: string | null
+  provider_message_id: string | null
+  delivered_at: string | null
+  read_at: string | null
+  replied_at: string | null
+  failed_reason: string | null
+  draft_id: string | null
   created_at: string
   updated_at: string
 }

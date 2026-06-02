@@ -12,7 +12,8 @@
  *       db:   { ok, latency_ms?, error? },
  *       env:  { ok, missing? }
  *     },
- *     version: string,
+ *     services: { twilio, resend, anthropic, redis, ... }  // presence-only, never fatal
+ *     version: string,   // deployed git SHA (NEXT_PUBLIC_GIT_SHA -> RAILWAY sha -> 'unknown')
  *     timestamp: ISO-8601
  *   }
  *
@@ -52,6 +53,30 @@ function checkEnv(): CheckResult & { missing?: string[] } {
   return { ok: false, error: 'missing required env vars', missing }
 }
 
+/**
+ * Presence map of optional integrations. These are degraded-mode services
+ * (Twilio, Resend, Anthropic, …), so a `false` here is informational, not a
+ * failure — it never flips the overall `ok`. Lets an operator confirm at a
+ * glance which channels a given deploy can actually use.
+ */
+function serviceStatus(): Record<string, boolean> {
+  return {
+    db: true, // reported in detail under checks.db; included here for completeness
+    twilio_whatsapp: Boolean(
+      serverEnv.TWILIO_ACCOUNT_SID && serverEnv.TWILIO_AUTH_TOKEN && serverEnv.TWILIO_WHATSAPP_FROM,
+    ),
+    twilio_status_callback: Boolean(serverEnv.TWILIO_STATUS_CALLBACK_TOKEN),
+    resend_email: Boolean(serverEnv.RESEND_API_KEY && serverEnv.RESEND_FROM),
+    inbound_email: Boolean(serverEnv.CRM_INBOUND_EMAIL_SECRET),
+    anthropic: Boolean(serverEnv.ANTHROPIC_API_KEY),
+    redis_queue: Boolean(serverEnv.REDIS_URL),
+    pagespeed: Boolean(serverEnv.GOOGLE_PAGESPEED_API_KEY || serverEnv.GOOGLE_PLACES_API_KEY),
+    lead_intake: Boolean(serverEnv.CRM_LEAD_INTAKE_SECRET),
+    sereno_sync: Boolean(serverEnv.VIGIA_CUSTOMERS_URL && serverEnv.VIGIA_SYNC_SECRET),
+    digest_email: Boolean(serverEnv.DIGEST_EMAIL_TO),
+  }
+}
+
 export async function GET() {
   const [db, env] = [await checkDb(), checkEnv()]
   const allOk = db.ok && env.ok
@@ -60,7 +85,8 @@ export async function GET() {
     ok: allOk,
     uptime_s: Math.round((Date.now() - STARTED_AT) / 1000),
     checks: { db, env },
-    version: serverEnv.NEXT_PUBLIC_GIT_SHA ?? 'unknown',
+    services: serviceStatus(),
+    version: serverEnv.NEXT_PUBLIC_GIT_SHA ?? serverEnv.RAILWAY_GIT_COMMIT_SHA ?? 'unknown',
     timestamp: new Date().toISOString(),
   }
 

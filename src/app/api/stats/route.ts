@@ -6,6 +6,7 @@ export async function GET() {
     const result = await pool.query(`
       SELECT pipeline_stage, COUNT(*)::int AS count
       FROM crm_leads
+      WHERE deleted_at IS NULL
       GROUP BY pipeline_stage
     `)
     const counts: Record<string, number> = {

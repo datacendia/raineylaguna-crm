@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { signSession, COOKIE_MAX_AGE_S } from '@/lib/auth'
 import { verifyUserPassword, recordLogin } from '@/lib/users'
-import { createRateLimiter, ipFromHeaders } from '@/lib/rate-limit'
+import { createDistributedRateLimiter, ipFromHeaders } from '@/lib/rate-limit'
 import { verifyCode } from '@/lib/totp'
 import { serverEnv } from '@/lib/env'
 
 // 5 attempts / IP / minute. Burst limit on credential stuffing.
-const loginLimiter = createRateLimiter({ windowMs: 60_000, max: 5 })
+// Redis-backed when REDIS_URL is set so the limit holds across instances.
+const loginLimiter = createDistributedRateLimiter('login', { windowMs: 60_000, max: 5 })
 // 5 bad TOTP codes / IP+user / 15 min. Once the password is correct,
 // brute-forcing a 6-digit code is otherwise cheap.
-const totpLimiter = createRateLimiter({ windowMs: 15 * 60_000, max: 5 })
+const totpLimiter = createDistributedRateLimiter('totp', { windowMs: 15 * 60_000, max: 5 })
 
 export async function POST(request: NextRequest) {
   const ip = ipFromHeaders(request.headers)
-  const rl = loginLimiter.check(ip)
+  const rl = await loginLimiter.check(ip)
   if (!rl.ok) {
     return NextResponse.json(
       { success: false, error: 'Too many attempts. Try again in a minute.' },
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     if (!code) {
       return NextResponse.json({ success: false, needs_totp: true }, { status: 401 })
     }
-    const totpRl = totpLimiter.check(`${ip}:${user.id}`)
+    const totpRl = await totpLimiter.check(`${ip}:${user.id}`)
     if (!totpRl.ok) {
       return NextResponse.json(
         { success: false, error: 'Too many TOTP attempts. Try again later.' },

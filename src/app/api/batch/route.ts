@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
 import { getOutreachQueue } from '@/lib/queue'
 import { templatesFor, SCRIPT_TEMPLATES } from '@/lib/scripts'
+import { businessHourSlot } from '@/lib/schedule'
 import type { Lead } from '@/lib/types'
-
-const DAY_MS = 24 * 60 * 60 * 1000
 
 /**
  * Schedule a batch outreach campaign.
@@ -37,21 +36,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const baseTime = start_at ? new Date(start_at).getTime() : Date.now()
+    const base = start_at ? new Date(start_at) : new Date()
     const { rows } = await pool.query<Lead>(
-      'SELECT * FROM crm_leads WHERE id = ANY($1::uuid[])',
+      'SELECT * FROM crm_leads WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL',
       [lead_ids]
     )
 
     let scheduled = 0
-    for (let i = 0; i < rows.length; i++) {
-      const lead = rows[i]
+    for (const lead of rows) {
       if (!templatesFor(lead).find((t) => t.id === template_id)) continue
-      const dayOffset = Math.floor(i / per_day)
-      const slotInDay = i % per_day
-      const scheduledFor = new Date(baseTime + dayOffset * DAY_MS + slotInDay * 60_000)
+      // Spread sends evenly across Lima business hours (09:00–18:00), with
+      // `per_day` messages per day. `scheduled` is the running slot index so
+      // spacing ignores leads skipped for not matching the template.
+      const scheduledFor = businessHourSlot(base, scheduled, per_day)
 
       const body = tpl.render(lead)
+      const subject = tpl.channel === 'Email' ? tpl.subject?.(lead) : undefined
       const insert = await pool.query(
         `INSERT INTO crm_outreach_events (lead_id, channel, status, scheduled_for, notes)
          VALUES ($1, $2, 'Pending', $3, $4) RETURNING id`,
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       const eventId = insert.rows[0].id
       await outreachQueue.add(
         'send',
-        { lead_id: lead.id, channel: tpl.channel, body, template_id: tpl.id },
+        { lead_id: lead.id, channel: tpl.channel, body, subject, template_id: tpl.id },
         {
           delay: Math.max(0, scheduledFor.getTime() - Date.now()),
           jobId: eventId,

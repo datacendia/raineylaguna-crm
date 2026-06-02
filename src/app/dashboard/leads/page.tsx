@@ -225,10 +225,27 @@ export default function LeadsPage() {
     return d.toISOString().slice(0, 10)
   }
 
+  // CSV export reuses the server-supported filters (district/niche/stage and
+  // snooze visibility). Client-only filters (search, social, website, …) are
+  // not represented server-side, so the download reflects the coarser filter.
+  const exportParams = new URLSearchParams()
+  if (filters.district !== 'all') exportParams.set('district', filters.district)
+  if (filters.niche !== 'all') exportParams.set('niche', filters.niche)
+  if (filters.stage !== 'all') exportParams.set('stage', filters.stage)
+  if (filters.includeSnoozed) exportParams.set('include_snoozed', 'true')
+  const exportHref = `/api/leads/export?${exportParams.toString()}`
+
   return (
     <div className="min-h-screen p-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-4xl font-bold">Leads <span className="text-base text-gray-500 font-normal">({filtered.length})</span></h1>
+        <a
+          href={exportHref}
+          className="inline-flex items-center gap-1.5 border rounded px-3 py-2 text-sm hover:bg-gray-50"
+          title="Download leads (district / niche / stage filters apply) as CSV"
+        >
+          ⬇ Export CSV
+        </a>
       </div>
 
       <div className="bg-white rounded-lg shadow p-6 mb-6 space-y-3">
@@ -409,6 +426,9 @@ export default function LeadsPage() {
                   )}
                   {snoozeActive && (
                     <span className="ml-2 text-[10px] uppercase tracking-wide bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded" title={`Snoozed until ${new Date(snoozeMs!).toLocaleDateString()}`}>💤 {new Date(snoozeMs!).toLocaleDateString()}</span>
+                  )}
+                  {l.sereno_customer && (
+                    <span className="ml-2 text-[10px] uppercase tracking-wide bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded" title="Converted to a Sereno customer">★ Sereno</span>
                   )}
                 </td>
                 <td className="p-3 text-sm">

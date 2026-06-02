@@ -36,6 +36,17 @@ export async function PATCH(
   const { id } = await params
   try {
     const body = await request.json()
+    // Restore a soft-deleted lead.
+    if (body.restore === true) {
+      const r = await pool.query(
+        'UPDATE crm_leads SET deleted_at = NULL WHERE id = $1 RETURNING *',
+        [id],
+      )
+      if (r.rows.length === 0) {
+        return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
+      }
+      return NextResponse.json(r.rows[0])
+    }
     const allowed = ['name', 'email', 'phone', 'website_url', 'instagram_url', 'facebook_url', 'linkedin_url', 'tiktok_url', 'instagram_active', 'website_status', 'pipeline_stage', 'notes', 'evaluation', 'strategic_action', 'next_action', 'snoozed_until']
     const fields: string[] = []
     const values: any[] = []
@@ -61,13 +72,20 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
   try {
-    await pool.query('DELETE FROM crm_leads WHERE id = $1', [id])
-    return NextResponse.json({ success: true })
+    // Soft-delete by default (recoverable via PATCH { restore: true });
+    // ?hard=true performs an irreversible delete.
+    const hard = new URL(request.url).searchParams.get('hard') === 'true'
+    if (hard) {
+      await pool.query('DELETE FROM crm_leads WHERE id = $1', [id])
+    } else {
+      await pool.query('UPDATE crm_leads SET deleted_at = NOW() WHERE id = $1', [id])
+    }
+    return NextResponse.json({ success: true, hard })
   } catch (error) {
     return NextResponse.json({ error: 'Failed to delete lead' }, { status: 500 })
   }

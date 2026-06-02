@@ -45,6 +45,7 @@ async function main() {
     `SELECT l.*
        FROM crm_leads l
       WHERE l.pipeline_stage = 'Lead'
+        AND l.deleted_at IS NULL
         AND l.created_at <= NOW() - ($1 || ' days')::interval
         AND (l.snoozed_until IS NULL OR l.snoozed_until <= NOW())
         AND NOT EXISTS (

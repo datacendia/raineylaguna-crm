@@ -10,9 +10,15 @@ export async function GET(request: NextRequest) {
     // include_snoozed=true → return everything; default hides leads whose
     // snoozed_until is still in the future so the daily-triage list stays small.
     const includeSnoozed = searchParams.get('include_snoozed') === 'true'
+    // include_deleted=true → include soft-deleted leads (trash view); default off.
+    const includeDeleted = searchParams.get('include_deleted') === 'true'
 
     let query = 'SELECT * FROM crm_leads WHERE 1=1'
     const params: any[] = []
+
+    if (!includeDeleted) {
+      query += ' AND deleted_at IS NULL'
+    }
 
     if (district && district !== 'all') {
       query += ` AND district = $${params.length + 1}`

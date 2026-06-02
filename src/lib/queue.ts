@@ -26,6 +26,8 @@ export type OutreachJob = {
   lead_id: string
   channel: 'Email' | 'Instagram DM' | 'WhatsApp' | 'LinkedIn'
   body: string
+  /** Subject line for Email sends; ignored by other channels. */
+  subject?: string
   template_id?: string
 }
 

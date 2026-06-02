@@ -50,8 +50,30 @@ const ENV_KEYS = [
   'GOOGLE_PLACES_API_KEY', // discovery/backfill; also the audit route's PageSpeed fallback key
   'GOOGLE_PAGESPEED_API_KEY', // audit prefers this; falls back to GOOGLE_PLACES_API_KEY, then keyless
 
+  // Email outreach (Resend). resend.ts returns a "not configured" result when
+  // RESEND_API_KEY is unset, so the worker leaves the event Pending instead of
+  // failing — same degraded-mode contract as Twilio.
+  'RESEND_API_KEY',
+  'RESEND_FROM', // e.g. "Rainey Laguna <hola@raineylaguna.com>"; required to send email
+
+  // Outreach tracking + links
+  'CRM_PUBLIC_BASE_URL', // public https origin; used to build Twilio StatusCallback URLs
+  'TWILIO_STATUS_CALLBACK_TOKEN', // shared secret in the status-callback path; webhook 401s without it
+  'CRM_INBOUND_EMAIL_SECRET', // shared secret for POST /api/leads/from-email (Cloudflare Email Worker)
+
+  // Sereno (vigia) customer cross-reference sync
+  'VIGIA_CUSTOMERS_URL', // read-only endpoint on vigia returning customer emails
+  'VIGIA_SYNC_SECRET', // bearer secret presented to VIGIA_CUSTOMERS_URL
+
+  // Digest auto-email (scripts/digest-email-cron.ts)
+  'DIGEST_EMAIL_TO', // comma-separated recipients for the Monday digest email
+
+  // Priority-score weight overrides (optional JSON; see src/lib/priority-score.ts)
+  'CRM_PRIORITY_WEIGHTS',
+
   // Build / runtime metadata
-  'NEXT_PUBLIC_GIT_SHA', // /api/health surfaces this as `version`; falls back to 'unknown'
+  'NEXT_PUBLIC_GIT_SHA', // /api/health surfaces this as `version`; falls back to RAILWAY sha, then 'unknown'
+  'RAILWAY_GIT_COMMIT_SHA', // injected by Railway for repo-linked services; health version fallback
   'NODE_ENV',
 ] as const
 
