@@ -32,7 +32,14 @@ export default function BatchOutreachPage() {
       }),
     })
     const data = await res.json()
-    setMsg(res.ok ? `Scheduled ${data.scheduled} jobs.` : `Error: ${data.error}`)
+    setMsg(
+      res.ok
+        ? `Scheduled ${data.scheduled} message${data.scheduled === 1 ? '' : 's'}` +
+            (data.skippedDuplicates
+              ? `, skipped ${data.skippedDuplicates} duplicate location${data.skippedDuplicates === 1 ? '' : 's'} (same email/phone).`
+              : '.')
+        : `Error: ${data.error}`,
+    )
   }
 
   return (
