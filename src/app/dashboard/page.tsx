@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 
 type Stats = {
   total: number
+  addressable?: number | null
   Lead: number
   Contacted: number
   Audited: number
@@ -29,14 +30,19 @@ export default function DashboardPage() {
     fd.append('file', file)
     const res = await fetch('/api/import', { method: 'POST', body: fd })
     const data = await res.json()
-    setImportMsg(res.ok ? `Imported ${data.imported} leads` : `Error: ${data.error}`)
+    setImportMsg(
+      res.ok
+        ? `Imported ${data.imported} new lead${data.imported === 1 ? '' : 's'}` +
+            (data.skipped ? `, skipped ${data.skipped} duplicate${data.skipped === 1 ? '' : 's'}` : '')
+        : `Error: ${data.error}`,
+    )
     setImporting(false)
     fetch('/api/stats').then((r) => r.json()).then(setStats)
   }
 
-  const cards = [
+  const cards: { label: string; value: number | string }[] = [
     { label: 'Total Leads', value: stats?.total ?? 0 },
-    { label: 'Contacted', value: stats?.Contacted ?? 0 },
+    { label: 'Addressable (independents)', value: stats?.addressable ?? '—' },
     { label: 'Proposals', value: stats?.Proposal ?? 0 },
     { label: 'Closed', value: stats?.Closed ?? 0 },
   ]

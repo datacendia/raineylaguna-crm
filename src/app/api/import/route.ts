@@ -51,17 +51,30 @@ export async function POST(request: NextRequest) {
       strategic_action: v[7]?.trim() || null,
     }))
 
+    let imported = 0
+    let skipped = 0
     for (const lead of leads) {
-      await pool.query(
-        `INSERT INTO crm_leads 
+      // Dedupe on (name, district) — the only stable identity a CSV row carries
+      // in this format (no place id, no phone). `ON CONFLICT DO NOTHING` with no
+      // matching unique constraint silently inserts EVERY row, which is how
+      // re-importing the same file doubled the lead count. This guard is
+      // idempotent: re-running an import is now a no-op for rows already present.
+      const r = await pool.query(
+        `INSERT INTO crm_leads
          (name, district, niche, instagram_active, website_url, website_status, evaluation, strategic_action)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT DO NOTHING`,
+         SELECT $1, $2, $3, $4, $5, $6, $7, $8
+         WHERE NOT EXISTS (
+           SELECT 1 FROM crm_leads
+           WHERE lower(btrim(name)) = lower(btrim($1))
+             AND lower(btrim(district)) = lower(btrim($2))
+         )`,
         [lead.name, lead.district, lead.niche, lead.instagram_active, lead.website_url, lead.website_status, lead.evaluation, lead.strategic_action]
       )
+      if ((r.rowCount ?? 0) > 0) imported++
+      else skipped++
     }
 
-    return NextResponse.json({ success: true, imported: leads.length })
+    return NextResponse.json({ success: true, imported, skipped })
   } catch (error) {
     return NextResponse.json({ error: 'Failed to import leads' }, { status: 500 })
   }

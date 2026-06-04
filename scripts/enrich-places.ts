@@ -9,14 +9,20 @@
  *       'Has Website'  when websiteUri is present
  *       'No Website'   when the place exists but has no site
  *       (left untouched when no confident match is found)
+ *   - address      (formattedAddress) — persisted, not discarded
+ *   - district     re-resolved FROM the address (corrects the search-term echo
+ *                  that mislabels districts); left untouched if unresolvable
  *   - notes gets an audit line with the matched name + place id + match score
  *
  * It does NOT invent anything. If Places returns no confident match, the lead
- * is left exactly as-is and logged as UNMATCHED. Instagram is NOT available
- * from Places — that is a separate web-search pass (scripts/enrich-instagram).
+ * is left exactly as-is and logged as UNMATCHED. Matches whose address still
+ * looks foreign (despite the Lima location fence) are skipped, not written.
+ * Instagram is NOT available from Places — that is a separate web-search pass
+ * (scripts/enrich-instagram).
  *
- * Idempotent: re-running only overwrites phone/website_url/website_status and
- * refreshes the audit note. Safe to resume after interruption.
+ * Idempotent: re-running only overwrites phone/website_url/website_status/
+ * address/district and refreshes the audit note. Safe to resume after
+ * interruption.
  *
  * Usage:
  *   $env:GOOGLE_PLACES_API_KEY='...'; $env:DATABASE_URL='...'
@@ -27,6 +33,7 @@
  */
 import { Pool } from 'pg'
 import { config } from 'dotenv'
+import { districtFromAddress, looksForeign, LIMA_RECTANGLE } from '../src/lib/lima-districts'
 
 config({ path: '.env.local' })
 
@@ -76,7 +83,7 @@ function normalize(s: string): string {
   return s
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9 ]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -101,7 +108,13 @@ async function searchPlace(lead: Lead): Promise<{ match: PlaceMatch; score: numb
       'X-Goog-Api-Key': API_KEY as string,
       'X-Goog-FieldMask': FIELD_MASK,
     },
-    body: JSON.stringify({ textQuery: query, languageCode: 'es', regionCode: 'PE', maxResultCount: 5 }),
+    body: JSON.stringify({
+      textQuery: query,
+      languageCode: 'es',
+      regionCode: 'PE',
+      maxResultCount: 5,
+      locationRestriction: { rectangle: LIMA_RECTANGLE },
+    }),
   })
   if (!res.ok) {
     const body = await res.text()
@@ -137,6 +150,7 @@ async function main() {
 
   let matched = 0
   let unmatched = 0
+  let foreign = 0
   let withSite = 0
   let withPhone = 0
 
@@ -149,30 +163,44 @@ async function main() {
         continue
       }
       const { match, score } = result
+      const address = match.formattedAddress ?? null
+      // The location fence should keep matches inside Lima, but if a foreign
+      // same-name place still slips through, do NOT overwrite this lead's data
+      // with it — skip and log.
+      if (looksForeign(address)) {
+        foreign++
+        console.log(`  FOREIGN?   ${lead.name} -> ${address} (skipped)`)
+        continue
+      }
       const phone = match.internationalPhoneNumber ?? null
       const website = match.websiteUri ?? null
       const status = website ? 'Has Website' : 'No Website'
+      // null → leave the existing district untouched (don't blank a good value).
+      const resolvedDistrict = districtFromAddress(address)
       const note = `[places ${new Date().toISOString().slice(0, 10)}] matched "${match.displayName?.text}" (score ${score.toFixed(2)}, id ${match.id}, ${match.businessStatus ?? 'status?'})`
 
       matched++
       if (website) withSite++
       if (phone) withPhone++
 
+      const shownDistrict = resolvedDistrict ?? lead.district ?? '?'
       if (DRY_RUN) {
-        console.log(`  MATCH ${score.toFixed(2)}  ${lead.name} -> site:${website ?? '—'} phone:${phone ?? '—'}`)
+        console.log(`  MATCH ${score.toFixed(2)}  ${lead.name} -> ${shownDistrict} site:${website ?? '—'} phone:${phone ?? '—'}`)
       } else {
         await pool.query(
           `UPDATE crm_leads
              SET phone = COALESCE($2, phone),
                  website_url = COALESCE($3, website_url),
                  website_status = $4,
-                 notes = CASE WHEN notes IS NULL OR notes = '' THEN $5
-                              ELSE notes || E'\\n' || $5 END,
+                 address = COALESCE($5, address),
+                 district = COALESCE($6, district),
+                 notes = CASE WHEN notes IS NULL OR notes = '' THEN $7
+                              ELSE notes || E'\\n' || $7 END,
                  updated_at = now()
            WHERE id = $1`,
-          [lead.id, phone, website, status, note],
+          [lead.id, phone, website, status, address, resolvedDistrict, note],
         )
-        console.log(`  ✓ ${score.toFixed(2)}  ${lead.name} -> site:${website ?? '—'} phone:${phone ?? '—'}`)
+        console.log(`  ✓ ${score.toFixed(2)}  ${lead.name} -> ${shownDistrict} site:${website ?? '—'} phone:${phone ?? '—'}`)
       }
     } catch (err) {
       console.error(`  ! ERROR  ${lead.name}: ${(err as Error).message}`)
@@ -182,7 +210,7 @@ async function main() {
   }
 
   console.log(
-    `\nDone. matched=${matched} unmatched=${unmatched} (of ${rows.length}); with website=${withSite}, with phone=${withPhone}.`,
+    `\nDone. matched=${matched} unmatched=${unmatched} foreign_skipped=${foreign} (of ${rows.length}); with website=${withSite}, with phone=${withPhone}.`,
   )
   await pool.end()
 }
