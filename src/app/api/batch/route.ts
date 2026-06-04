@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
 import { templatesFor, SCRIPT_TEMPLATES } from '@/lib/scripts'
 import { businessHourSlot } from '@/lib/schedule'
+import { dedupeByDestination } from '@/lib/outreach-dedupe'
 import type { Lead } from '@/lib/types'
 
 /**
@@ -32,12 +33,16 @@ export async function POST(request: NextRequest) {
       [lead_ids]
     )
 
+    // Only leads the chosen template actually matches.
+    const eligible = rows.filter((lead) => templatesFor(lead).find((t) => t.id === template_id))
+    // Collapse multiple locations of one company (same email / phone) to a
+    // single message, so a batch never hits one corporate inbox N times.
+    const { keep, skipped } = dedupeByDestination(eligible, tpl.channel)
+
     let scheduled = 0
-    for (const lead of rows) {
-      if (!templatesFor(lead).find((t) => t.id === template_id)) continue
+    for (const lead of keep) {
       // Spread sends evenly across Lima business hours (09:00–18:00), with
-      // `per_day` messages per day. `scheduled` is the running slot index so
-      // spacing ignores leads skipped for not matching the template.
+      // `per_day` messages per day. `scheduled` is the running slot index.
       const scheduledFor = businessHourSlot(base, scheduled, per_day)
 
       const body = tpl.render(lead)
@@ -50,7 +55,7 @@ export async function POST(request: NextRequest) {
       scheduled++
     }
 
-    return NextResponse.json({ scheduled })
+    return NextResponse.json({ scheduled, skippedDuplicates: skipped.length })
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: 'Failed to schedule batch' }, { status: 500 })
