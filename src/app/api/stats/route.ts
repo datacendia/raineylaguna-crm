@@ -18,7 +18,23 @@ export async function GET() {
     }
     for (const row of result.rows) counts[row.pipeline_stage] = row.count
     const total = Object.values(counts).reduce((a, b) => a + b, 0)
-    return NextResponse.json({ total, ...counts })
+
+    // "Real addressable" = the universe a one-person boutique can actually sell
+    // to: independents only, with chains/franchises/placeholders excluded. This
+    // is the honest counterweight to the headline `total`. Guarded so the
+    // endpoint keeps working before the franchise-flag migration has run.
+    let addressable: number | null = null
+    try {
+      const r = await pool.query(
+        `SELECT COUNT(*)::int AS c FROM crm_leads
+          WHERE deleted_at IS NULL AND COALESCE(is_chain, false) = false`,
+      )
+      addressable = r.rows[0]?.c ?? null
+    } catch {
+      addressable = null
+    }
+
+    return NextResponse.json({ total, addressable, ...counts })
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 })
   }

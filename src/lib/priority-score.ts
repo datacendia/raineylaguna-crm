@@ -1,4 +1,5 @@
 import type { Lead } from './types'
+import { tierForDistrict } from './lima-districts'
 
 /**
  * Smart Prioritization Score — replaces the static High/Med/Low `potential`
@@ -24,7 +25,13 @@ export type PriorityBreakdown = {
 }
 
 export type PriorityScore = {
+  /** Final, affordability-adjusted score (0-100). This is what the list sorts
+   * and displays — `base` × `geoFactor`, rounded. */
   score: number
+  /** Sum of the four additive components, before the fit multiplier. */
+  base: number
+  /** District-tier / chain multiplier applied to `base` to get `score`. */
+  geoFactor: number
   band: ScoreBand
   breakdown: PriorityBreakdown
   /** Short, human-readable explanation for tooltips. */
@@ -45,6 +52,10 @@ export type PriorityWeights = {
     max: number
   }
   bands: { critico: number; alto: number; medio: number }
+  /** Affordability / fit multipliers applied to the additive base. tierA is the
+   * premium core (kept at 1), tierB/tierC demote outer districts, and `chain`
+   * caps corporate/franchise rows near the floor. */
+  geo: { tierA: number; tierB: number; tierC: number; chain: number }
 }
 
 /**
@@ -82,6 +93,7 @@ export const DEFAULT_WEIGHTS: PriorityWeights = {
     max: 20,
   },
   bands: { critico: 75, alto: 55, medio: 35 },
+  geo: { tierA: 1, tierB: 0.85, tierC: 0.7, chain: 0.15 },
 }
 
 function mergeWeights(base: PriorityWeights, o: any): PriorityWeights {
@@ -95,6 +107,7 @@ function mergeWeights(base: PriorityWeights, o: any): PriorityWeights {
     },
     workability: { ...base.workability, ...(o.workability ?? {}) },
     bands: { ...base.bands, ...(o.bands ?? {}) },
+    geo: { ...base.geo, ...(o.geo ?? {}) },
   }
 }
 
@@ -196,21 +209,34 @@ export function computePriorityScore(lead: Lead, now: Date = new Date()): Priori
     niche: nichePoints(lead, w),
     workability: workabilityPoints(lead, now, w),
   }
-  const score = breakdown.recency + breakdown.website + breakdown.niche + breakdown.workability
+  const base = breakdown.recency + breakdown.website + breakdown.niche + breakdown.workability
+
+  // Affordability / fit multiplier — the axis the additive model is blind to.
+  // A premium-district lead keeps its full base; outer-cone and chain leads are
+  // demoted so the wall of identical "fresh, no-website salon" scores finally
+  // separates by who can actually pay. Multiplicative keeps the result inside
+  // 0-100, so the existing 75/55/35 bands stay meaningful.
+  const tier = tierForDistrict(lead.district)
+  const tierFactor = tier === 'A' ? w.geo.tierA : tier === 'B' ? w.geo.tierB : w.geo.tierC
+  const geoFactor = lead.is_chain ? Math.min(tierFactor, w.geo.chain) : tierFactor
+  const score = Math.round(base * geoFactor)
   const band = bandFor(score, w)
 
   // Build a short "why" line tuned for hover tooltips on the leads list.
   const reasons: string[] = []
+  if (lead.is_chain) reasons.push('cadena/corporativo')
   if (breakdown.website >= 25) reasons.push('sin web o web rota')
   else if (breakdown.website >= 15) reasons.push('web débil')
   if (breakdown.recency >= 20) reasons.push('lead reciente')
   else if (breakdown.recency <= 5) reasons.push('lead frío')
   if (breakdown.niche >= 22) reasons.push('nicho con alta conversión')
+  if (tier === 'A') reasons.push('distrito premium')
+  else if (tier === 'C' && !lead.is_chain) reasons.push('distrito de bajo ticket')
   if (breakdown.workability === 0) reasons.push('en snooze')
   else if (breakdown.workability >= 12) reasons.push('contactable')
   const why = reasons.length ? reasons.join(' · ') : 'señales mixtas'
 
-  return { score, band, breakdown, why }
+  return { score, base, geoFactor, band, breakdown, why }
 }
 
 /** Color token for the score badge — kept here so UI stays consistent across pages. */

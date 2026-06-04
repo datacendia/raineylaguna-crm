@@ -62,6 +62,7 @@ export default function LeadsPage() {
   const [filters, setFilters] = useState({
     district: 'all', niche: 'all', stage: 'all', search: '', includeSnoozed: false,
     website: 'all', evaluation: 'all', social: 'all', chat: 'all', nextAction: '', strategicAction: '',
+    hideChains: true,
   })
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'score', dir: 'desc' })
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -93,6 +94,7 @@ export default function LeadsPage() {
     setFilters({
       district: 'all', niche: 'all', stage: 'all', search: '', includeSnoozed: false,
       website: 'all', evaluation: 'all', social: 'all', chat: 'all', nextAction: '', strategicAction: '',
+      hideChains: true,
     })
     setVisibleCount(PAGE_SIZE)
   }
@@ -139,6 +141,7 @@ export default function LeadsPage() {
     if (filters.strategicAction && !(lead.strategic_action ?? '').toLowerCase().includes(filters.strategicAction.toLowerCase())) return false
     if (filters.social !== 'all' && !matchSocial(lead)) return false
     if (filters.chat !== 'all' && (filters.chat === 'has' ? !lead.phone : !!lead.phone)) return false
+    if (filters.hideChains && lead.is_chain) return false
     return true
   })
 
@@ -316,6 +319,14 @@ export default function LeadsPage() {
               onChange={(e) => applyFilter({ includeSnoozed: e.target.checked })}
             />
             Include snoozed leads
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={filters.hideChains}
+              onChange={(e) => applyFilter({ hideChains: e.target.checked })}
+            />
+            Hide chains
           </label>
           <button onClick={resetFilters} className="border rounded px-3 py-2 text-sm hover:bg-gray-50">
             Clear filters

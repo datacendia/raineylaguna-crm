@@ -58,14 +58,16 @@ describe('computePriorityScore', () => {
     expect(ps.score).toBeLessThanOrEqual(100)
   })
 
-  it('breakdown components sum to total score', () => {
+  it('breakdown components sum to the pre-adjustment base', () => {
     const ps = computePriorityScore(baseLead(), NOW)
     const sum =
       ps.breakdown.recency +
       ps.breakdown.website +
       ps.breakdown.niche +
       ps.breakdown.workability
-    expect(sum).toBe(ps.score)
+    expect(sum).toBe(ps.base)
+    // Final score is the base scaled by the affordability/fit multiplier.
+    expect(ps.score).toBe(Math.round(ps.base * ps.geoFactor))
   })
 
   it('lead with no website earns the maximum website-gap points', () => {
@@ -184,6 +186,42 @@ describe('computePriorityScore', () => {
       NOW,
     )
     expect(['Bajo', 'Medio']).toContain(bajo.band)
+  })
+
+  it('premium district outranks an outer-cone district at equal signals', () => {
+    const common = {
+      niche: 'Beauty & Wellness',
+      website_url: null,
+      website_status: null,
+      phone: '+51999000111',
+    } satisfies Partial<Lead>
+    const premium = computePriorityScore(baseLead({ ...common, district: 'San Isidro' }), NOW)
+    const outer = computePriorityScore(baseLead({ ...common, district: 'Villa María del Triunfo' }), NOW)
+    expect(premium.base).toBe(outer.base) // identical additive signals…
+    expect(premium.geoFactor).toBeGreaterThan(outer.geoFactor) // …separated only by tier
+    expect(premium.score).toBeGreaterThan(outer.score)
+    expect(premium.band).toBe('Crítico')
+    expect(outer.band).not.toBe('Crítico')
+  })
+
+  it('a chain/corporate lead is crushed below an equivalent independent', () => {
+    const common = {
+      district: 'San Isidro',
+      niche: 'Beauty & Wellness',
+      website_url: null,
+      website_status: null,
+      phone: '+51999000111',
+    } satisfies Partial<Lead>
+    const indie = computePriorityScore(baseLead({ ...common, is_chain: false }), NOW)
+    const chain = computePriorityScore(baseLead({ ...common, is_chain: true }), NOW)
+    expect(indie.band).toBe('Crítico')
+    expect(chain.score).toBeLessThan(indie.score)
+    expect(chain.band).toBe('Bajo')
+  })
+
+  it('an unknown / foreign-contaminated district falls to Tier C', () => {
+    const ps = computePriorityScore(baseLead({ district: 'Santa Rosa de Lima' }), NOW)
+    expect(ps.geoFactor).toBe(DEFAULT_WEIGHTS.geo.tierC)
   })
 })
 

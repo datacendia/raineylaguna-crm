@@ -27,6 +27,14 @@ export type Lead = {
   evaluation: string | null
   strategic_action: string | null
   potential: string | null
+  /** Flagged by the franchise-detection migration: corporate/chain storefront
+   * (OXXO, Tambo, …) or placeholder row. Not sellable as a boutique build, so
+   * the priority score crushes it and the dashboard excludes it from the
+   * addressable count. Optional: undefined on rows predating the migration. */
+  is_chain?: boolean | null
+  /** What linked this row to a chain — `phone:…`, `email:…`, `brand:…`, or
+   * `placeholder`. Lets the operator audit the franchise grouping. */
+  chain_key?: string | null
   pipeline_stage: PipelineStage
   notes: string | null
   next_action: string | null

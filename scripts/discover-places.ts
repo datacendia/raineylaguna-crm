@@ -6,6 +6,11 @@
  * business not already in crm_leads. Contact fields (phone, website) come
  * straight from the same call — no second request, no fabrication.
  *
+ * Geography is trusted from the place's own formattedAddress, NOT the district
+ * we searched for: results outside Lima Province are fenced out by a hard
+ * locationRestriction AND re-checked against the address before insert, and the
+ * stored district is resolved from the address (the search term is a fallback).
+ *
  * Idempotent: dedupes on google_place_id (added as a column on first run).
  * Re-running only adds places discovered since last time.
  *
@@ -17,6 +22,8 @@
  */
 import { Pool } from 'pg'
 import { config } from 'dotenv'
+import { DISTRICTS } from '../src/lib/types'
+import { districtFromAddress, looksForeign, LIMA_RECTANGLE } from '../src/lib/lima-districts'
 
 config({ path: '.env.local' })
 
@@ -38,19 +45,6 @@ const MAX_PAGES = mpIdx >= 0 ? Math.max(1, parseInt(args[mpIdx + 1], 10)) : 2
 const dIdx = args.indexOf('--districts')
 const DISTRICT_FILTER = dIdx >= 0 ? args[dIdx + 1].split(',').map((s) => s.trim()) : null
 
-// 43 districts of Lima Province.
-const ALL_DISTRICTS = [
-  'Ancón', 'Ate', 'Barranco', 'Breña', 'Carabayllo', 'Chaclacayo', 'Chorrillos',
-  'Cieneguilla', 'Comas', 'El Agustino', 'Independencia', 'Jesús María', 'La Molina',
-  'La Victoria', 'Lima Cercado', 'Lince', 'Los Olivos', 'Lurigancho', 'Lurín',
-  'Magdalena del Mar', 'Miraflores', 'Pachacámac', 'Pucusana', 'Pueblo Libre',
-  'Puente Piedra', 'Punta Hermosa', 'Punta Negra', 'Rímac', 'San Bartolo', 'San Borja',
-  'San Isidro', 'San Juan de Lurigancho', 'San Juan de Miraflores', 'San Luis',
-  'San Martín de Porres', 'San Miguel', 'Santa Anita', 'Santa María del Mar',
-  'Santa Rosa', 'Santiago de Surco', 'Surquillo', 'Villa El Salvador',
-  'Villa María del Triunfo',
-]
-
 // One focused Spanish search term per niche (best signal-to-noise for Peru).
 const NICHES: Array<{ niche: string; term: string }> = [
   { niche: 'Gastronomy', term: 'restaurantes' },
@@ -67,6 +61,10 @@ const NICHES: Array<{ niche: string; term: string }> = [
 ]
 
 const SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText'
+// Hard geographic fence around Lima Province — see LIMA_RECTANGLE in
+// src/lib/lima-districts. Unlike regionCode (only a bias), locationRestriction
+// EXCLUDES results outside the box, stopping "Santa Rosa de Lima" salons in
+// Caracas / San Salvador from ever entering the pipeline.
 const FIELD_MASK = [
   'places.id',
   'places.displayName',
@@ -91,7 +89,13 @@ type Place = {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 async function searchPage(query: string, pageToken?: string): Promise<{ places: Place[]; next?: string }> {
-  const body: Record<string, unknown> = { textQuery: query, languageCode: 'es', regionCode: 'PE', maxResultCount: 20 }
+  const body: Record<string, unknown> = {
+    textQuery: query,
+    languageCode: 'es',
+    regionCode: 'PE',
+    maxResultCount: 20,
+    locationRestriction: { rectangle: LIMA_RECTANGLE },
+  }
   if (pageToken) body.pageToken = pageToken
   const res = await fetch(SEARCH_URL, {
     method: 'POST',
@@ -117,7 +121,7 @@ async function ensureSchema() {
 }
 
 async function main() {
-  const districts = DISTRICT_FILTER ?? ALL_DISTRICTS
+  const districts = DISTRICT_FILTER ?? DISTRICTS
   if (!DRY_RUN) await ensureSchema()
 
   // Pre-load existing place ids so we don't re-insert across runs.
@@ -135,6 +139,7 @@ async function main() {
 
   let inserted = 0
   let skippedDup = 0
+  let skippedForeign = 0
   let calls = 0
 
   for (const district of districts) {
@@ -164,8 +169,16 @@ async function main() {
           const website = p.websiteUri ?? null
           const status = website ? 'Has Website' : 'No Website'
           const address = p.formattedAddress ?? null
+          // Trust the address, not the search term. Drop anything that still
+          // looks foreign (belt-and-suspenders with the location fence) and
+          // store the district Google actually places this business in.
+          if (looksForeign(address)) {
+            skippedForeign++
+            continue
+          }
+          const resolvedDistrict = districtFromAddress(address) ?? district
           if (DRY_RUN) {
-            console.log(`  + ${district}/${niche}: ${name} (site:${website ?? '—'} phone:${phone ?? '—'} addr:${address ?? '—'})`)
+            console.log(`  + ${resolvedDistrict}/${niche}: ${name} (site:${website ?? '—'} phone:${phone ?? '—'} addr:${address ?? '—'})`)
             inserted++
           } else {
             try {
@@ -173,7 +186,7 @@ async function main() {
                 `INSERT INTO crm_leads (name, district, niche, phone, website_url, website_status, source, google_place_id, address)
                  VALUES ($1,$2,$3,$4,$5,$6,'google_places',$7,$8)
                  ON CONFLICT (google_place_id) WHERE google_place_id IS NOT NULL DO NOTHING`,
-                [name, district, niche, phone, website, status, p.id, address],
+                [name, resolvedDistrict, niche, phone, website, status, p.id, address],
               )
               if ((r.rowCount ?? 0) > 0) {
                 inserted++
@@ -194,7 +207,9 @@ async function main() {
     console.log(`  ${district}: +${districtNew} new`)
   }
 
-  console.log(`\nDone. api_calls=${calls}, new_leads=${inserted}, duplicates_skipped=${skippedDup}.`)
+  console.log(
+    `\nDone. api_calls=${calls}, new_leads=${inserted}, duplicates_skipped=${skippedDup}, foreign_skipped=${skippedForeign}.`,
+  )
   await pool.end()
 }
 
