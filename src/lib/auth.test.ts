@@ -43,7 +43,14 @@ describe("CRM auth: session JWT round-trip", () => {
   it("verifySession returns null for a tampered token", async () => {
     const { signSession, verifySession } = await import("./auth");
     const token = await signSession({ uid: "u1", email: "op@test", role: "admin" });
-    const tampered = token.slice(0, -1) + (token.endsWith("A") ? "B" : "A");
+    // Tamper the FIRST char of the signature segment, not the last. A 32-byte
+    // HMAC-SHA256 signature's final base64url char encodes only 4 meaningful
+    // bits, so for ~1/16 of (time-dependent) tokens a last-char flip decodes to
+    // the same signature and verifies cleanly — a flake. Every non-final char
+    // carries a full 6 bits, so flipping one always alters the signature.
+    const dot = token.lastIndexOf(".");
+    const sig = token.slice(dot + 1);
+    const tampered = token.slice(0, dot + 1) + (sig[0] === "A" ? "B" : "A") + sig.slice(1);
     expect(await verifySession(tampered)).toBeNull();
   });
 
