@@ -58,7 +58,6 @@ On **both** the Web and Worker services, set:
 
 | Variable | Value |
 |---|---|
-| `CRM_PASSWORD_HASH` | bcrypt hash from `npm run hash -- "your-password"` |
 | `CRM_COOKIE_SECRET` | a random 64-char string (e.g. from `openssl rand -hex 32`) |
 | `DATABASE_URL` | reference to Postgres service |
 | `REDIS_URL` | reference to Redis service |
@@ -87,12 +86,24 @@ This applies `database/crm-schema.sql` to the Postgres instance.
 npm run seed
 ```
 
+### Create your admin user
+
+Auth is **per-user** (the `users` table) — there is no shared password. Create
+the first user from Railway's "Run a Command" UI on the Web service:
+
+```bash
+npm run user:create -- "you@raineylaguna.com" "Your Name" "a-strong-password"
+```
+
+Re-run for each additional user. (Locally, the same script works with
+`DATABASE_URL` set in `.env.local`.)
+
 ---
 
 ## 5. Verify
 
 - Open `https://crm.raineylaguna.com/login` (or the `*.up.railway.app` URL).
-- Log in with the password whose hash you stored in `CRM_PASSWORD_HASH`.
+- Log in with the email + password of a user you created via `npm run user:create`.
 - Navigate to **Batch Outreach** and schedule a small test batch (e.g. 3 leads).
 - The Worker logs in Railway should show events being marked Sent at the scheduled times.
 
