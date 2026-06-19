@@ -552,6 +552,18 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                 })}
               </ul>
             ) : null}
+
+            {lead.audit_findings?.reportUrl ? (
+              <a
+                href={lead.audit_findings.reportUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 self-start px-3 py-1.5 border rounded text-sm hover:bg-gray-50"
+                title="Self-audit the prospect ran on raineylaguna.com"
+              >
+                Open the report the prospect saw ↗
+              </a>
+            ) : null}
           </div>
         )}
       </div>

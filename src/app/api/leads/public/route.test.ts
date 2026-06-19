@@ -12,6 +12,10 @@
 
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// Canonical cross-repo contract payload. An identical example (typed against
+// IntakeLead) lives in raineylaguna-next at
+// src/lib/__fixtures__/intake-contract.example.ts. Keep the two in sync.
+import intakeContract from "./intake-contract.example.json";
 
 const SECRET = "intake-shared-secret-long-enough-for-prod";
 
@@ -160,7 +164,7 @@ describe("POST /api/leads/public", () => {
       expect(insertArgs[0]).toBe("Ada Lovelace");
       expect(insertArgs[3]).toBe("Barranco"); // district
       expect(insertArgs[4]).toBe("café"); // niche
-      expect(insertArgs[6]).toBe("/contacto"); // source
+      expect(insertArgs[6]).toBe("contact-form"); // source normalized (ROADMAP #13)
     });
 
     it("appends notes to an existing lead when email matches", async () => {
@@ -209,6 +213,96 @@ describe("POST /api/leads/public", () => {
       await POST(makeRequest({ name: "Ada", phone: "+51 (999) 111-222" }));
       const selectArgs = queryMock.mock.calls[0][1] as unknown[];
       expect(selectArgs[1]).toBe("51999111222");
+    });
+  });
+
+  describe("structured audit intake (#2)", () => {
+    it("persists website_url, rounded score, and mapped audit_findings on insert", async () => {
+      queryMock
+        .mockResolvedValueOnce({ rowCount: 0, rows: [] })
+        .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: "lead-audit" }] });
+      const { POST } = await import("./route");
+      const res = await POST(
+        makeRequest({
+          name: "Ada",
+          email: "a@b.test",
+          source: "audit-tool",
+          audit: {
+            url: "https://prospect.test",
+            score: 42.6,
+            findings: [
+              { severity: "high", title: "No HTTPS", detail: "Served over http" },
+              { severity: "low", title: "Missing OG image" },
+            ],
+            runId: "abc123def456ghij",
+            reportUrl: "https://raineylaguna.com/auditoria/r/abc123def456ghij",
+          },
+        }),
+      );
+      expect(res.status).toBe(201);
+
+      const insertArgs = queryMock.mock.calls[1][1] as unknown[];
+      expect(insertArgs[6]).toBe("audit"); // 'audit-tool' normalized (#1 + #13)
+      expect(insertArgs[7]).toBe("https://prospect.test"); // website_url
+      expect(insertArgs[8]).toBe(43); // digital_health_score (rounded)
+
+      const findings = JSON.parse(insertArgs[9] as string);
+      expect(findings.score).toBe(43);
+      expect(findings.source).toBe("website-audit-tool");
+      expect(findings.reportUrl).toContain("/auditoria/r/abc123def456ghij");
+      expect(findings.flags).toHaveLength(2);
+      expect(findings.flags[0]).toMatchObject({ severity: "high" });
+      expect(findings.flags[0].label).toContain("No HTTPS");
+    });
+
+    it("leaves audit columns null when no audit is supplied", async () => {
+      queryMock
+        .mockResolvedValueOnce({ rowCount: 0, rows: [] })
+        .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: "lead-noaudit" }] });
+      const { POST } = await import("./route");
+      await POST(makeRequest({ name: "Ada", email: "a@b.test" }));
+      const insertArgs = queryMock.mock.calls[1][1] as unknown[];
+      expect(insertArgs[7]).toBeNull(); // website_url
+      expect(insertArgs[8]).toBeNull(); // digital_health_score
+      expect(insertArgs[9]).toBeNull(); // audit_findings
+    });
+
+    it("accepts the canonical cross-repo contract fixture and maps its audit", async () => {
+      queryMock
+        .mockResolvedValueOnce({ rowCount: 0, rows: [] })
+        .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: "lead-contract" }] });
+      const { POST } = await import("./route");
+      const res = await POST(makeRequest(intakeContract));
+      expect(res.status).toBe(201);
+
+      const insertArgs = queryMock.mock.calls[1][1] as unknown[];
+      expect(insertArgs[6]).toBe("audit"); // 'audit-tool' normalized
+      expect(insertArgs[7]).toBe("https://prospect.example"); // website_url
+      expect(insertArgs[8]).toBe(57); // digital_health_score
+      const findings = JSON.parse(insertArgs[9] as string);
+      expect(findings.reportUrl).toBe(
+        "https://raineylaguna.com/auditoria/r/ctr0123456789abcd",
+      );
+      expect(findings.flags).toHaveLength(2);
+    });
+
+    it("forwards audit values on dedupe for the guarded UPDATE", async () => {
+      queryMock
+        .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: "lead-existing", notes: null }] })
+        .mockResolvedValueOnce({ rowCount: 1, rows: [] });
+      const { POST } = await import("./route");
+      const res = await POST(
+        makeRequest({
+          name: "Ada",
+          email: "ada@example.test",
+          audit: { url: "https://prospect.test", score: 80, runId: "r1" },
+        }),
+      );
+      expect(res.status).toBe(200);
+      const updateArgs = queryMock.mock.calls[1][1] as unknown[];
+      expect(updateArgs[3]).toBe("https://prospect.test"); // website_url
+      expect(updateArgs[4]).toBe(80); // digital_health_score
+      expect(JSON.parse(updateArgs[5] as string).reportUrl).toBeNull();
     });
   });
 });

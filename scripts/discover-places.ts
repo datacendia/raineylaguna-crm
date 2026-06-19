@@ -183,8 +183,10 @@ async function main() {
           } else {
             try {
               const r = await pool.query(
+                // 'discovery' is the canonical lead-source bucket (see
+                // src/lib/lead-source.ts); google_place_id retains the provenance.
                 `INSERT INTO crm_leads (name, district, niche, phone, website_url, website_status, source, google_place_id, address)
-                 VALUES ($1,$2,$3,$4,$5,$6,'google_places',$7,$8)
+                 VALUES ($1,$2,$3,$4,$5,$6,'discovery',$7,$8)
                  ON CONFLICT (google_place_id) WHERE google_place_id IS NOT NULL DO NOTHING`,
                 [name, resolvedDistrict, niche, phone, website, status, p.id, address],
               )
