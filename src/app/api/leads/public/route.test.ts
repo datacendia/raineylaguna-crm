@@ -12,6 +12,10 @@
 
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// Canonical cross-repo contract payload. An identical example (typed against
+// IntakeLead) lives in raineylaguna-next at
+// src/lib/__fixtures__/intake-contract.example.ts. Keep the two in sync.
+import intakeContract from "./intake-contract.example.json";
 
 const SECRET = "intake-shared-secret-long-enough-for-prod";
 
@@ -261,6 +265,25 @@ describe("POST /api/leads/public", () => {
       expect(insertArgs[7]).toBeNull(); // website_url
       expect(insertArgs[8]).toBeNull(); // digital_health_score
       expect(insertArgs[9]).toBeNull(); // audit_findings
+    });
+
+    it("accepts the canonical cross-repo contract fixture and maps its audit", async () => {
+      queryMock
+        .mockResolvedValueOnce({ rowCount: 0, rows: [] })
+        .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: "lead-contract" }] });
+      const { POST } = await import("./route");
+      const res = await POST(makeRequest(intakeContract));
+      expect(res.status).toBe(201);
+
+      const insertArgs = queryMock.mock.calls[1][1] as unknown[];
+      expect(insertArgs[6]).toBe("audit-tool"); // source
+      expect(insertArgs[7]).toBe("https://prospect.example"); // website_url
+      expect(insertArgs[8]).toBe(57); // digital_health_score
+      const findings = JSON.parse(insertArgs[9] as string);
+      expect(findings.reportUrl).toBe(
+        "https://raineylaguna.com/auditoria/r/ctr0123456789abcd",
+      );
+      expect(findings.flags).toHaveLength(2);
     });
 
     it("forwards audit values on dedupe for the guarded UPDATE", async () => {

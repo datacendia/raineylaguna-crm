@@ -1,0 +1,19 @@
+{
+  "name": "Contract Fixture Lead",
+  "email": "contract@example.test",
+  "phone": "+51999000111",
+  "district": "Miraflores",
+  "niche": "Restaurante",
+  "source": "audit-tool",
+  "notes": "Solicitó informe completo.",
+  "audit": {
+    "url": "https://prospect.example",
+    "score": 57,
+    "findings": [
+      { "severity": "high", "title": "Sin HTTPS", "detail": "El sitio no usa conexión segura." },
+      { "severity": "medium", "title": "SEO débil", "detail": "Faltan metadatos básicos." }
+    ],
+    "runId": "ctr0123456789abcd",
+    "reportUrl": "https://raineylaguna.com/auditoria/r/ctr0123456789abcd"
+  }
+}

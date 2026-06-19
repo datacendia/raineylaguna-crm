@@ -35,9 +35,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import pool from '@/lib/db'
 import { serverEnv } from '@/lib/env'
+import { createDistributedRateLimiter, ipFromHeaders } from '@/lib/rate-limit'
 import type { AuditFindings, AuditFlag, AuditFlagSeverity } from '@/lib/types'
 
 export const runtime = 'nodejs'
+
+/**
+ * Per-IP rate limit, defence-in-depth behind the shared secret. The endpoint
+ * is normally called server-to-server by the marketing site (one IP, a few
+ * leads/day), so a generous cap never bites legitimate traffic but still caps
+ * a flood from any single source. Redis-backed across instances when REDIS_URL
+ * is set; in-process otherwise.
+ */
+const intakeLimiter = createDistributedRateLimiter('public-intake', {
+  windowMs: 60_000,
+  max: 120,
+})
 
 function constantTimeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a)
@@ -110,6 +123,15 @@ function mapIntakeAudit(
 }
 
 export async function POST(request: NextRequest) {
+  const rl = await intakeLimiter.check(ipFromHeaders(request.headers))
+  if (!rl.ok) {
+    const retryAfter = Math.max(1, Math.ceil((rl.resetAt - Date.now()) / 1000))
+    return NextResponse.json(
+      { ok: false, error: 'Too many requests' },
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+    )
+  }
+
   const expected = serverEnv.CRM_LEAD_INTAKE_SECRET
   const provided = request.headers.get('X-Lead-Intake-Secret')
 
