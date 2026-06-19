@@ -117,6 +117,13 @@ export type AuditFindings = {
   metrics: AuditMetrics
   flags: AuditFlag[]
   summary: string
+  /** Provenance for audits that arrived via the public site's audit tool
+   *  (POST /api/leads/public) rather than a CRM-run audit. Undefined on
+   *  CRM-run audits. `reportUrl` deep-links to the exact /auditoria/r/<id>
+   *  report the prospect saw. */
+  source?: string
+  runId?: string | null
+  reportUrl?: string | null
 }
 
 export const DISTRICTS = [
