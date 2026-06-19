@@ -23,6 +23,7 @@
  *   - De-duplicates: if an existing lead with the same email or phone exists,
  *     append the new note to its notes column instead of creating a duplicate.
  *   - Inserts (or updates) into crm_leads with pipeline_stage='Lead'.
+ *   - Normalises `source` to the canonical lead-source vocabulary (lead-source.ts).
  *   - When `audit` is present, populates website_url / digital_health_score /
  *     audit_findings / audited_at so the prospect's self-audit shows up exactly
  *     like a CRM-run one — without re-auditing. On dedupe it only fills these
@@ -36,6 +37,7 @@ import { timingSafeEqual } from 'crypto'
 import pool from '@/lib/db'
 import { serverEnv } from '@/lib/env'
 import { createDistributedRateLimiter, ipFromHeaders } from '@/lib/rate-limit'
+import { normalizeSource } from '@/lib/lead-source'
 import type { AuditFindings, AuditFlag, AuditFlagSeverity } from '@/lib/types'
 
 export const runtime = 'nodejs'
@@ -158,7 +160,7 @@ export async function POST(request: NextRequest) {
   const district = body.district ? String(body.district).trim() : 'Otro'
   const niche = body.niche ? String(body.niche).trim() : 'Otro'
   const notes = body.notes ? String(body.notes).trim() : null
-  const source = body.source ? String(body.source).trim().slice(0, 100) : 'public-intake'
+  const source = normalizeSource(body.source) // canonical channel bucket (ROADMAP #13)
   const audit = mapIntakeAudit(body.audit as IntakeAudit | undefined)
 
   // Bind values shared by the insert and dedupe paths.

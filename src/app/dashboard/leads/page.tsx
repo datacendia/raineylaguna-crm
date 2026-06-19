@@ -6,6 +6,7 @@ import { DISTRICTS, NICHES, STAGES, type Lead, type PipelineStage } from '@/lib/
 import { computePriorityScore, bandColor } from '@/lib/priority-score'
 import { googleMapsUrl } from '@/lib/maps'
 import { healthColor } from '@/lib/audit'
+import { LEAD_SOURCES, normalizeSource } from '@/lib/lead-source'
 
 function whatsappLink(phone: string, name: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -61,7 +62,7 @@ export default function LeadsPage() {
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({
     district: 'all', niche: 'all', stage: 'all', search: '', includeSnoozed: false,
-    website: 'all', evaluation: 'all', social: 'all', chat: 'all', nextAction: '', strategicAction: '',
+    website: 'all', evaluation: 'all', social: 'all', chat: 'all', source: 'all', nextAction: '', strategicAction: '',
     hideChains: true,
   })
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'score', dir: 'desc' })
@@ -93,7 +94,7 @@ export default function LeadsPage() {
   const resetFilters = () => {
     setFilters({
       district: 'all', niche: 'all', stage: 'all', search: '', includeSnoozed: false,
-      website: 'all', evaluation: 'all', social: 'all', chat: 'all', nextAction: '', strategicAction: '',
+      website: 'all', evaluation: 'all', social: 'all', chat: 'all', source: 'all', nextAction: '', strategicAction: '',
       hideChains: true,
     })
     setVisibleCount(PAGE_SIZE)
@@ -141,6 +142,7 @@ export default function LeadsPage() {
     if (filters.strategicAction && !(lead.strategic_action ?? '').toLowerCase().includes(filters.strategicAction.toLowerCase())) return false
     if (filters.social !== 'all' && !matchSocial(lead)) return false
     if (filters.chat !== 'all' && (filters.chat === 'has' ? !lead.phone : !!lead.phone)) return false
+    if (filters.source !== 'all' && normalizeSource(lead.source) !== filters.source) return false
     if (filters.hideChains && lead.is_chain) return false
     return true
   })
@@ -295,6 +297,10 @@ export default function LeadsPage() {
             <option value="all">Phone: any</option>
             <option value="has">Has phone</option>
             <option value="none">No phone</option>
+          </select>
+          <select value={filters.source} onChange={(e) => applyFilter({ source: e.target.value })} className="border p-2 rounded">
+            <option value="all">All Sources</option>
+            {LEAD_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">

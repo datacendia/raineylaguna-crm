@@ -164,7 +164,7 @@ describe("POST /api/leads/public", () => {
       expect(insertArgs[0]).toBe("Ada Lovelace");
       expect(insertArgs[3]).toBe("Barranco"); // district
       expect(insertArgs[4]).toBe("café"); // niche
-      expect(insertArgs[6]).toBe("/contacto"); // source
+      expect(insertArgs[6]).toBe("contact-form"); // source normalized (ROADMAP #13)
     });
 
     it("appends notes to an existing lead when email matches", async () => {
@@ -242,7 +242,7 @@ describe("POST /api/leads/public", () => {
       expect(res.status).toBe(201);
 
       const insertArgs = queryMock.mock.calls[1][1] as unknown[];
-      expect(insertArgs[6]).toBe("audit-tool"); // source (structured, #1)
+      expect(insertArgs[6]).toBe("audit"); // 'audit-tool' normalized (#1 + #13)
       expect(insertArgs[7]).toBe("https://prospect.test"); // website_url
       expect(insertArgs[8]).toBe(43); // digital_health_score (rounded)
 
@@ -276,7 +276,7 @@ describe("POST /api/leads/public", () => {
       expect(res.status).toBe(201);
 
       const insertArgs = queryMock.mock.calls[1][1] as unknown[];
-      expect(insertArgs[6]).toBe("audit-tool"); // source
+      expect(insertArgs[6]).toBe("audit"); // 'audit-tool' normalized
       expect(insertArgs[7]).toBe("https://prospect.example"); // website_url
       expect(insertArgs[8]).toBe(57); // digital_health_score
       const findings = JSON.parse(insertArgs[9] as string);
