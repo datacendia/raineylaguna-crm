@@ -1,5 +1,5 @@
 import type { Lead } from './types'
-import { tierForDistrict } from './lima-districts'
+import { tierForDistrict } from './markets'
 
 /**
  * Smart Prioritization Score — replaces the static High/Med/Low `potential`
@@ -216,7 +216,7 @@ export function computePriorityScore(lead: Lead, now: Date = new Date()): Priori
   // demoted so the wall of identical "fresh, no-website salon" scores finally
   // separates by who can actually pay. Multiplicative keeps the result inside
   // 0-100, so the existing 75/55/35 bands stay meaningful.
-  const tier = tierForDistrict(lead.district)
+  const tier = tierForDistrict(lead.city, lead.district)
   const tierFactor = tier === 'A' ? w.geo.tierA : tier === 'B' ? w.geo.tierB : w.geo.tierC
   const geoFactor = lead.is_chain ? Math.min(tierFactor, w.geo.chain) : tierFactor
   const score = Math.round(base * geoFactor)

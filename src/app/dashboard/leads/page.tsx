@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { DISTRICTS, NICHES, STAGES, type Lead, type PipelineStage } from '@/lib/types'
+import { NICHES, STAGES, type Lead, type PipelineStage } from '@/lib/types'
 import { computePriorityScore, bandColor } from '@/lib/priority-score'
 import { googleMapsUrl } from '@/lib/maps'
 import { healthColor } from '@/lib/audit'
 import { LEAD_SOURCES, normalizeSource } from '@/lib/lead-source'
+import { MARKET_NAMES, districtsForCity } from '@/lib/markets'
 
 function whatsappLink(phone: string, name: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -22,7 +23,7 @@ function whatsappLink(phone: string, name: string): string {
 const PAGE_SIZE = 100
 
 type SortKey =
-  | 'name' | 'score' | 'district' | 'address' | 'niche' | 'stage' | 'next_action'
+  | 'name' | 'score' | 'city' | 'district' | 'address' | 'niche' | 'stage' | 'next_action'
   | 'website' | 'health' | 'evaluation' | 'strategic_action' | 'email' | 'phone' | 'social' | 'chat'
 
 // Columns whose first click should sort high-to-low (most relevant first).
@@ -61,7 +62,7 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({
-    district: 'all', niche: 'all', stage: 'all', search: '', includeSnoozed: false,
+    city: 'all', district: 'all', niche: 'all', stage: 'all', search: '', includeSnoozed: false,
     website: 'all', evaluation: 'all', social: 'all', chat: 'all', source: 'all', nextAction: '', strategicAction: '',
     hideChains: true,
   })
@@ -93,7 +94,7 @@ export default function LeadsPage() {
 
   const resetFilters = () => {
     setFilters({
-      district: 'all', niche: 'all', stage: 'all', search: '', includeSnoozed: false,
+      city: 'all', district: 'all', niche: 'all', stage: 'all', search: '', includeSnoozed: false,
       website: 'all', evaluation: 'all', social: 'all', chat: 'all', source: 'all', nextAction: '', strategicAction: '',
       hideChains: true,
     })
@@ -103,6 +104,7 @@ export default function LeadsPage() {
   useEffect(() => {
     setLoading(true)
     const params = new URLSearchParams()
+    if (filters.city !== 'all') params.set('city', filters.city)
     if (filters.district !== 'all') params.set('district', filters.district)
     if (filters.niche !== 'all') params.set('niche', filters.niche)
     if (filters.stage !== 'all') params.set('stage', filters.stage)
@@ -113,12 +115,19 @@ export default function LeadsPage() {
         setLeads(Array.isArray(data) ? data : [])
         setLoading(false)
       })
-  }, [filters.district, filters.niche, filters.stage, filters.includeSnoozed])
+  }, [filters.city, filters.district, filters.niche, filters.stage, filters.includeSnoozed])
 
   // Distinct Website-status / Evaluation values for their dropdowns, derived
   // from the loaded set so the options always reflect real data.
   const websiteStatuses = Array.from(new Set(leads.map((l) => l.website_status).filter(Boolean))).sort() as string[]
   const evaluations = Array.from(new Set(leads.map((l) => l.evaluation).filter(Boolean))).sort() as string[]
+
+  // District dropdown is scoped to the chosen city; with no city chosen, offer
+  // the union across all markets.
+  const districtOptions =
+    filters.city !== 'all'
+      ? districtsForCity(filters.city)
+      : Array.from(new Set(MARKET_NAMES.flatMap((c) => districtsForCity(c))))
 
   const scored = leads.map((l) => ({ lead: l, ps: computePriorityScore(l) }))
 
@@ -156,6 +165,7 @@ export default function LeadsPage() {
       case 'chat': return l.phone ? 1 : 0
       case 'stage': return STAGES.indexOf(l.pipeline_stage)
       case 'name': return l.name.toLowerCase()
+      case 'city': return (l.city ?? '').toLowerCase()
       case 'district': return (l.district ?? '').toLowerCase()
       case 'address': return (l.address ?? '').toLowerCase()
       case 'niche': return (l.niche ?? '').toLowerCase()
@@ -234,6 +244,7 @@ export default function LeadsPage() {
   // snooze visibility). Client-only filters (search, social, website, …) are
   // not represented server-side, so the download reflects the coarser filter.
   const exportParams = new URLSearchParams()
+  if (filters.city !== 'all') exportParams.set('city', filters.city)
   if (filters.district !== 'all') exportParams.set('district', filters.district)
   if (filters.niche !== 'all') exportParams.set('niche', filters.niche)
   if (filters.stage !== 'all') exportParams.set('stage', filters.stage)
@@ -262,9 +273,13 @@ export default function LeadsPage() {
             onChange={(e) => applyFilter({ search: e.target.value })}
             className="border p-2 rounded"
           />
+          <select value={filters.city} onChange={(e) => applyFilter({ city: e.target.value, district: 'all' })} className="border p-2 rounded">
+            <option value="all">All Cities</option>
+            {MARKET_NAMES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
           <select value={filters.district} onChange={(e) => applyFilter({ district: e.target.value })} className="border p-2 rounded">
             <option value="all">All Districts</option>
-            {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+            {districtOptions.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
           <select value={filters.niche} onChange={(e) => applyFilter({ niche: e.target.value })} className="border p-2 rounded">
             <option value="all">All Niches</option>
@@ -409,6 +424,7 @@ export default function LeadsPage() {
               <th className="p-3 w-8"><input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleAll} /></th>
               <SortHeader label="Name" sortKey="name" sort={sort} onSort={toggleSort} />
               <SortHeader label="Score" sortKey="score" sort={sort} onSort={toggleSort} />
+              <SortHeader label="City" sortKey="city" sort={sort} onSort={toggleSort} />
               <SortHeader label="District" sortKey="district" sort={sort} onSort={toggleSort} />
               <SortHeader label="Address" sortKey="address" sort={sort} onSort={toggleSort} />
               <SortHeader label="Niche" sortKey="niche" sort={sort} onSort={toggleSort} />
@@ -426,9 +442,9 @@ export default function LeadsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={16} className="p-6 text-gray-500">Loading…</td></tr>
+              <tr><td colSpan={17} className="p-6 text-gray-500">Loading…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={16} className="p-6 text-gray-500">No leads match these filters.</td></tr>
+              <tr><td colSpan={17} className="p-6 text-gray-500">No leads match these filters.</td></tr>
             ) : visible.map((l) => {
               const snoozeMs = l.snoozed_until ? new Date(l.snoozed_until).getTime() : null
               const snoozeExpired = snoozeMs !== null && snoozeMs <= Date.now()
@@ -464,6 +480,7 @@ export default function LeadsPage() {
                     )
                   })()}
                 </td>
+                <td className="p-3 text-sm">{l.city}</td>
                 <td className="p-3 text-sm">{l.district}</td>
                 <td className="p-3 text-sm text-gray-600 max-w-[16rem] truncate" onClick={(e) => e.stopPropagation()}>
                   <a href={googleMapsUrl(l)} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" title={l.address ?? 'View on Google Maps'}>

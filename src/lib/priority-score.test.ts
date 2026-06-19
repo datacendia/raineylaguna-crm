@@ -18,6 +18,7 @@ const baseLead = (overrides: Partial<Lead> = {}): Lead => ({
   email: null,
   phone: null,
   source: null,
+  city: 'Lima',
   district: 'Miraflores',
   niche: 'Professional Services',
   category: null,
@@ -52,6 +53,15 @@ const baseLead = (overrides: Partial<Lead> = {}): Lead => ({
 })
 
 describe('computePriorityScore', () => {
+  it('is city-aware: a premium district in another market keeps Tier A; an outer one is demoted', () => {
+    const w = DEFAULT_WEIGHTS
+    const premium = computePriorityScore(baseLead({ city: 'Boston', district: 'Back Bay' }), NOW)
+    const outer = computePriorityScore(baseLead({ city: 'Boston', district: 'Dorchester' }), NOW)
+    expect(premium.geoFactor).toBe(w.geo.tierA)
+    expect(outer.geoFactor).toBe(w.geo.tierC)
+    expect(premium.score).toBeGreaterThan(outer.score)
+  })
+
   it('returns a score in [0, 100] for a default Lead', () => {
     const ps = computePriorityScore(baseLead(), NOW)
     expect(ps.score).toBeGreaterThanOrEqual(0)

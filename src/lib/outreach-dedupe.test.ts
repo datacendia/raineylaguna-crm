@@ -10,6 +10,7 @@ const baseLead = (overrides: Partial<Lead> = {}): Lead => ({
   email: null,
   phone: null,
   source: null,
+  city: 'Lima',
   district: 'Miraflores',
   niche: 'Beauty & Wellness',
   category: null,

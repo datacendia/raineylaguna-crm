@@ -15,6 +15,7 @@ export const runtime = 'nodejs'
 const COLUMNS = [
   'id',
   'name',
+  'city',
   'district',
   'niche',
   'category',
@@ -55,6 +56,7 @@ function csvCell(value: unknown): string {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+    const city = searchParams.get('city')
     const district = searchParams.get('district')
     const niche = searchParams.get('niche')
     const stage = searchParams.get('stage')
@@ -67,6 +69,10 @@ export async function GET(request: NextRequest) {
     const params: any[] = []
 
     if (!includeDeleted) query += ' AND deleted_at IS NULL'
+    if (city && city !== 'all') {
+      query += ` AND city = $${params.length + 1}`
+      params.push(city)
+    }
     if (district && district !== 'all') {
       query += ` AND district = $${params.length + 1}`
       params.push(district)
