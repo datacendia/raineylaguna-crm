@@ -82,6 +82,22 @@ npm run digest-email        # Monday 09:00 Lima digest email (needs DIGEST_EMAIL
 npm run sync-sereno         # Sereno customer cross-reference sync
 ```
 
+### Lead discovery — free vs paid
+
+Two ways to find NEW leads (both insert with `source='discovery'`, dedupe, and
+are idempotent):
+
+```bash
+npm run discover:osm        # FREE — OpenStreetMap Overpass API (no API key, no bill)
+npm run discover            # Google Places (New) — metered; needs GOOGLE_PLACES_API_KEY
+```
+
+`discover:osm` is the default choice — it costs nothing. Overpass is a shared
+volunteer service, so the script throttles between queries; override the
+endpoint with `OVERPASS_URL` if the default is busy. Google Places has richer
+coverage/phone data but is billed per call (it is easy to run up a real bill on
+a full sweep), so reach for it only when OSM coverage falls short in an area.
+
 > **Note for Railway deploys.** The `Procfile` `web` and `worker` lines do **not**
 > auto-spawn two processes on Railway — Railway ignores Procfile process types.
 > The worker must be added as a **separate Railway service** pointing at the
