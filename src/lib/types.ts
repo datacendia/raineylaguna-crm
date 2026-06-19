@@ -6,6 +6,8 @@ export type Lead = {
   email: string | null
   phone: string | null
   source: string | null
+  /** Market/city this lead belongs to (markets.ts). Backfilled to 'Lima'. */
+  city: string
   district: string
   niche: string
   category: string | null

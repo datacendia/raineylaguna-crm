@@ -1,5 +1,5 @@
 /**
- * Discover NEW leads across metropolitan Lima via the FREE OpenStreetMap
+ * Discover NEW leads in any configured market via the FREE OpenStreetMap
  * Overpass API — a no-cost alternative to scripts/discover-places.ts (Google
  * Places, which is metered and can run up a real bill).
  *
@@ -16,20 +16,23 @@
  * queries and sends a descriptive User-Agent. Override the endpoint with
  * OVERPASS_URL (e.g. a mirror) if the default is busy.
  *
+ * City is selected with --city (default Lima); the market registry
+ * (src/lib/markets.ts) supplies its bounding box + districts.
+ *
  * Usage:
  *   $env:DATABASE_URL='...'
  *   npx tsx scripts/discover-overpass.ts --dry-run
- *   npx tsx scripts/discover-overpass.ts --niches "Gastronomy,Fitness"
- *   npx tsx scripts/discover-overpass.ts --max-per-niche 300
+ *   npx tsx scripts/discover-overpass.ts --city Boston
+ *   npx tsx scripts/discover-overpass.ts --city Glasgow --niches "Gastronomy,Fitness"
+ *   npx tsx scripts/discover-overpass.ts --city "Los Angeles" --max-per-niche 300
  */
 import { Pool } from 'pg'
 import { config } from 'dotenv'
-import { districtFromAddress, LIMA_RECTANGLE } from '../src/lib/lima-districts'
+import { getMarket, districtFromAddress, MARKET_NAMES, DEFAULT_CITY, type Market } from '../src/lib/markets'
 import {
   NICHE_OSM_FILTERS,
   buildOverpassQuery,
   osmElementToLead,
-  type Bbox,
   type OsmElement,
 } from '../src/lib/overpass'
 
@@ -45,20 +48,24 @@ const OVERPASS_URL = process.env.OVERPASS_URL || 'https://overpass-api.de/api/in
 
 const args = process.argv.slice(2)
 const DRY_RUN = args.includes('--dry-run')
+const cIdx = args.indexOf('--city')
+const CITY = cIdx >= 0 ? args[cIdx + 1] : DEFAULT_CITY
 const nIdx = args.indexOf('--niches')
 const NICHE_FILTER = nIdx >= 0 ? args[nIdx + 1].split(',').map((s) => s.trim()) : null
 const mIdx = args.indexOf('--max-per-niche')
 const MAX_PER_NICHE = mIdx >= 0 ? Math.max(1, parseInt(args[mIdx + 1], 10)) : 500
 
-// LIMA_RECTANGLE is the Google shape ({low:{latitude,longitude}, high:{…}});
-// convert to the Overpass (south, west, north, east) order. Same hard geo
-// fence, so no separate foreign-address check is needed here.
-const BBOX: Bbox = {
-  south: LIMA_RECTANGLE.low.latitude,
-  west: LIMA_RECTANGLE.low.longitude,
-  north: LIMA_RECTANGLE.high.latitude,
-  east: LIMA_RECTANGLE.high.longitude,
+const resolvedMarket = getMarket(CITY)
+if (!resolvedMarket) {
+  console.error(`✗ Unknown city "${CITY}". Known markets: ${MARKET_NAMES.join(', ')}`)
+  process.exit(1)
 }
+// Re-bind to a definitely-typed const so the closures below see `Market`, not
+// `Market | undefined` (control-flow narrowing doesn't reach into them).
+const market: Market = resolvedMarket
+// The market's bbox is a hard geographic fence (src/lib/markets.ts), so no
+// separate foreign-address check is needed here.
+const BBOX = market.bbox
 
 const pool = new Pool({ connectionString: DATABASE_URL })
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -119,7 +126,7 @@ async function main() {
   }
 
   console.log(
-    `${DRY_RUN ? '[DRY RUN] ' : ''}Overpass sweep: ${niches.length} niches over Lima bbox (endpoint ${OVERPASS_URL})\n`,
+    `${DRY_RUN ? '[DRY RUN] ' : ''}Overpass sweep: ${market.name} — ${niches.length} niches over its bbox (endpoint ${OVERPASS_URL})\n`,
   )
 
   let inserted = 0
@@ -161,7 +168,7 @@ async function main() {
       // Canonicalise the Lima district from the address, then the OSM district
       // tag; default 'Otro' when neither resolves (bbox already fences geo).
       const district =
-        districtFromAddress(lead.address) ?? districtFromAddress(lead.district) ?? 'Otro'
+        districtFromAddress(CITY, lead.address) ?? districtFromAddress(CITY, lead.district) ?? 'Otro'
       if (district === 'Otro') districtUnknown++
       const status = lead.website ? 'Has Website' : 'No Website'
 
@@ -181,10 +188,10 @@ async function main() {
         const r = await pool.query(
           // 'discovery' is the canonical lead-source bucket (src/lib/lead-source.ts);
           // osm_id retains the provenance (e.g. 'node/123456').
-          `INSERT INTO crm_leads (name, district, niche, phone, website_url, website_status, source, osm_id, address)
-           VALUES ($1,$2,$3,$4,$5,$6,'discovery',$7,$8)
+          `INSERT INTO crm_leads (name, city, district, niche, phone, website_url, website_status, source, osm_id, address)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,'discovery',$8,$9)
            ON CONFLICT (osm_id) WHERE osm_id IS NOT NULL DO NOTHING`,
-          [lead.name, district, niche, lead.phone, lead.website, status, lead.osmId, lead.address],
+          [lead.name, market.name, district, niche, lead.phone, lead.website, status, lead.osmId, lead.address],
         )
         if ((r.rowCount ?? 0) > 0) {
           inserted++
