@@ -57,12 +57,13 @@ type DueEvent = {
   subject: string | null
   phone: string | null
   email: string | null
+  city: string | null
 }
 
 /** Oldest due, not-yet-attempted Pending event, locked for this run only. */
 const SELECT_NEXT_DUE = `
   SELECT e.id, e.lead_id, e.channel::text AS channel, e.notes AS body, e.subject,
-         l.phone, l.email
+         l.phone, l.email, l.city
     FROM crm_outreach_events e
     JOIN crm_leads l ON l.id = e.lead_id AND l.deleted_at IS NULL
    WHERE e.status = 'Pending'
@@ -151,6 +152,7 @@ async function drainLive(pool: Pool): Promise<{ sent: number; deferred: number }
           subject: ev.subject,
           phone: ev.phone,
           email: ev.email,
+          city: ev.city,
           eventId: ev.id,
         })
         if (outcome.status === 'sent') {
