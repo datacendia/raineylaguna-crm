@@ -21,6 +21,7 @@ técnica. Los temas de configuración o de servidores están marcados como "para
 
 | # | Capítulo | Para |
 |---|----------|------|
+| 00 | [Resumen — cómo encaja todo](00-resumen.md) | Todas |
 | 01 | [Primeros pasos — ingreso, 2FA, el tablero](01-primeros-pasos.md) | Uso diario |
 | 02 | [Flujo diario y semanal](02-flujo-diario.md) | Uso diario |
 | 03 | [Leads, pipeline, descubrimiento y ciudades](03-leads-y-pipeline.md) | Uso diario |
@@ -28,8 +29,8 @@ técnica. Los temas de configuración o de servidores están marcados como "para
 | 05 | [Cumplimiento y seguridad — qué puedes enviar y dónde](05-cumplimiento.md) | Uso diario + fundador |
 | 06 | [Solución de problemas](06-solucion-de-problemas.md) | Uso diario + fundador |
 
-> **00 — Resumen** y **07 — Configuración** están en inglés (son más técnicos):
-> ver [../00-overview.md](../00-overview.md) y [../07-configuration.md](../07-configuration.md).
+> **07 — Configuración** está en inglés (es técnico, para el fundador):
+> ver [../07-configuration.md](../07-configuration.md).
 
 ## Notas
 
