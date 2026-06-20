@@ -31,6 +31,8 @@ export type Market = {
   timezone: string
   /** E.164 country calling code, no '+' (Phase 2: phone formatting). */
   phoneCode: string
+  /** Outreach language for this market — drives bilingual draft generation. */
+  locale: 'es' | 'en'
   /** Neighbourhoods / districts in this market. */
   districts: string[]
   /** Affordability tier per district; anything unlisted defaults to 'C'. */
@@ -93,21 +95,21 @@ const LA_TIERS: Record<string, DistrictTier> = {
 
 export const MARKETS: Record<string, Market> = {
   Lima: {
-    name: 'Lima', country: 'Peru', currency: 'PEN', timezone: 'America/Lima', phoneCode: '51',
+    name: 'Lima', country: 'Peru', currency: 'PEN', timezone: 'America/Lima', phoneCode: '51', locale: 'es',
     districts: [...LIMA_DISTRICTS], tiers: LIMA_TIERS, bbox: LIMA_BBOX,
   },
   Boston: {
-    name: 'Boston', country: 'USA', currency: 'USD', timezone: 'America/New_York', phoneCode: '1',
+    name: 'Boston', country: 'USA', currency: 'USD', timezone: 'America/New_York', phoneCode: '1', locale: 'en',
     districts: BOSTON_DISTRICTS, tiers: BOSTON_TIERS,
     bbox: { south: 42.22, west: -71.2, north: 42.45, east: -70.98 },
   },
   Glasgow: {
-    name: 'Glasgow', country: 'UK', currency: 'GBP', timezone: 'Europe/London', phoneCode: '44',
+    name: 'Glasgow', country: 'UK', currency: 'GBP', timezone: 'Europe/London', phoneCode: '44', locale: 'en',
     districts: GLASGOW_DISTRICTS, tiers: GLASGOW_TIERS,
     bbox: { south: 55.78, west: -4.4, north: 55.93, east: -4.1 },
   },
   'Los Angeles': {
-    name: 'Los Angeles', country: 'USA', currency: 'USD', timezone: 'America/Los_Angeles', phoneCode: '1',
+    name: 'Los Angeles', country: 'USA', currency: 'USD', timezone: 'America/Los_Angeles', phoneCode: '1', locale: 'en',
     districts: LA_DISTRICTS, tiers: LA_TIERS,
     bbox: { south: 33.7, west: -118.69, north: 34.34, east: -118.12 },
   },
@@ -125,6 +127,11 @@ export function getMarket(city?: string | null): Market | undefined {
 
 export function districtsForCity(city?: string | null): string[] {
   return getMarket(city)?.districts ?? []
+}
+
+/** Outreach language for a city's market. Defaults to Spanish (the base market). */
+export function localeForCity(city?: string | null): 'es' | 'en' {
+  return getMarket(city)?.locale ?? 'es'
 }
 
 /** Affordability tier for a (city, district). Unknown city/district → 'C'. */

@@ -55,8 +55,8 @@ const worker = new Worker<OutreachJob>(
     const { lead_id, channel, body, subject } = job.data
     const eventId = job.id as string
 
-    const { rows } = await pool.query<{ phone: string | null; email: string | null }>(
-      'SELECT phone, email FROM crm_leads WHERE id = $1',
+    const { rows } = await pool.query<{ phone: string | null; email: string | null; city: string | null }>(
+      'SELECT phone, email, city FROM crm_leads WHERE id = $1',
       [lead_id]
     )
     const lead = rows[0]
@@ -67,6 +67,7 @@ const worker = new Worker<OutreachJob>(
       subject,
       phone: lead?.phone,
       email: lead?.email,
+      city: lead?.city,
       eventId,
     })
 

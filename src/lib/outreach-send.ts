@@ -21,6 +21,8 @@
 
 import { getTwilioConfig, sendWhatsapp } from './twilio'
 import { getResendConfig, sendEmail, isEmail } from './resend'
+import { getMarket } from './markets'
+import { emailAllowedForLead } from './contactability'
 import { serverEnv } from './env'
 
 export type Channel = 'Email' | 'Instagram DM' | 'WhatsApp' | 'LinkedIn'
@@ -32,6 +34,29 @@ export const MANUAL_CHANNELS: Channel[] = ['Instagram DM', 'LinkedIn']
 
 export function isManualChannel(channel: string): boolean {
   return (MANUAL_CHANNELS as string[]).includes(channel)
+}
+
+/**
+ * Markets where automated WhatsApp outreach is currently permitted.
+ *
+ * Cold, automated WhatsApp/SMS to scraped numbers carries heavy legal
+ * exposure outside Peru — US TCPA ($500–$1,500 statutory damages *per text*)
+ * and UK PECR/GDPR — and breaches Twilio's AUP / WhatsApp Business policy
+ * without prior opt-in. Until a per-market consent path exists, automated
+ * WhatsApp is gated to Peru only. Email and the manual channels are unaffected.
+ */
+const AUTOMATED_WHATSAPP_COUNTRIES: readonly string[] = ['Peru']
+
+/**
+ * Whether automated WhatsApp may be sent to a lead in the given city.
+ *
+ * Fail-closed: a lead whose city isn't a known market (markets.ts) — or whose
+ * city is missing — is treated as NOT allowed, so a new market or an
+ * un-threaded call site never leaks a send.
+ */
+export function whatsappAllowedForCity(city?: string | null): boolean {
+  const market = getMarket(city)
+  return !!market && AUTOMATED_WHATSAPP_COUNTRIES.includes(market.country)
 }
 
 export type SendOutcome =
@@ -51,6 +76,9 @@ export interface SendInput {
   subject?: string | null
   /** Outreach-event id, used to correlate Twilio status callbacks. */
   eventId?: string
+  /** Lead's market/city (markets.ts). Drives the automated-WhatsApp
+   *  compliance gate — see whatsappAllowedForCity. */
+  city?: string | null
 }
 
 const DEFAULT_EMAIL_SUBJECT = 'Una observación sobre su presencia digital'
@@ -78,6 +106,15 @@ export async function sendOutreach(input: SendInput): Promise<SendOutcome> {
   const channel = input.channel
 
   if (channel === 'WhatsApp') {
+    // Compliance gate: automated WhatsApp is Peru-only for now
+    // (see whatsappAllowedForCity). Checked before any provider call so a
+    // gated message never reaches Twilio. Stays Pending with a clear reason.
+    if (!whatsappAllowedForCity(input.city)) {
+      return {
+        status: 'pending',
+        reason: `whatsapp_gated:${input.city ?? 'unknown'}_market_not_allowed`,
+      }
+    }
     const cfg = getTwilioConfig()
     if (!cfg) return { status: 'pending', reason: 'twilio_not_configured' }
     if (!input.phone) return { status: 'pending', reason: 'lead_phone_missing' }
@@ -96,6 +133,13 @@ export async function sendOutreach(input: SendInput): Promise<SendOutcome> {
     const cfg = getResendConfig()
     if (!cfg) return { status: 'pending', reason: 'resend_not_configured' }
     if (!isEmail(input.email)) return { status: 'pending', reason: 'lead_email_missing' }
+    // B2B safety gate: in consent-first markets (UK/EU) automated email is
+    // restricted to business-domain addresses; a free-provider address is
+    // treated as an individual and held for manual review. Permissive markets
+    // (US CAN-SPAM, Peru/LatAm) allow any address with an opt-out.
+    if (!emailAllowedForLead(input.email, input.city)) {
+      return { status: 'pending', reason: `email_gated:personal_address_in_${input.city ?? 'unknown'}` }
+    }
     const subject = input.subject?.trim() || DEFAULT_EMAIL_SUBJECT
     const res = await sendEmail(cfg, input.email, subject, { text: input.body })
     return res.ok

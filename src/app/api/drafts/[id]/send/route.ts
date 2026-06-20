@@ -30,7 +30,7 @@ export async function POST(
     const actor = session?.email ?? null
 
     const draftRes = await pool.query(
-      `SELECT d.*, l.phone, l.email
+      `SELECT d.*, l.phone, l.email, l.city
          FROM crm_outreach_drafts d
          JOIN crm_leads l ON l.id = d.lead_id
         WHERE d.id = $1 AND l.deleted_at IS NULL`,
@@ -47,6 +47,7 @@ export async function POST(
       status: string
       phone: string | null
       email: string | null
+      city: string | null
     }
     if (draft.status !== 'pending') {
       return NextResponse.json({ error: 'draft already acted on' }, { status: 409 })
@@ -84,6 +85,7 @@ export async function POST(
       body: draft.body,
       phone: draft.phone,
       email: draft.email,
+      city: draft.city,
       eventId,
     })
 
