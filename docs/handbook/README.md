@@ -30,7 +30,7 @@ technical. Setup and server topics are marked "for the founder".
 
 - **Screenshots:** lines like `> 📷 Screenshot: …` are placeholders — capture the
   real screen there when you can; the surrounding words already tell you what to do.
-- **Spanish:** the operator chapters (01–06) will also be provided in Spanish (es-PE)
-  for day-to-day use.
+- **Spanish:** the operator chapters (01–06) are available in Spanish (es-PE) under
+  [es/](es/README.md) for day-to-day use.
 - Chapters 04, 05 and 07 were drafted from the live code and merit a quick review
   pass for house style and screenshots.
