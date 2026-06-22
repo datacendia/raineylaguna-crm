@@ -7,6 +7,7 @@ import {
   districtsForCity,
   tierForDistrict,
   districtFromAddress,
+  isManualOnlyMarket,
 } from './markets'
 
 describe('markets', () => {
@@ -64,6 +65,25 @@ describe('markets', () => {
   it('districtsForCity returns the market list, or empty for unknown', () => {
     expect(districtsForCity('Boston')).toContain('Seaport')
     expect(districtsForCity('Nope')).toEqual([])
+  })
+
+  describe('manual-only South American markets', () => {
+    it('registers Bogotá and Buenos Aires with Spanish locale + correct country', () => {
+      expect(MARKET_NAMES).toEqual(expect.arrayContaining(['Bogotá', 'Buenos Aires']))
+      expect(getMarket('Bogotá')?.country).toBe('Colombia')
+      expect(getMarket('Bogotá')?.locale).toBe('es')
+      expect(getMarket('Buenos Aires')?.country).toBe('Argentina')
+      expect(getMarket('Buenos Aires')?.locale).toBe('es')
+    })
+
+    it('flags them manual-only; the established markets are not', () => {
+      expect(isManualOnlyMarket('Bogotá')).toBe(true)
+      expect(isManualOnlyMarket('Buenos Aires')).toBe(true)
+      expect(isManualOnlyMarket('Lima')).toBe(false)
+      expect(isManualOnlyMarket('Boston')).toBe(false)
+      expect(isManualOnlyMarket(undefined)).toBe(false)
+      expect(isManualOnlyMarket('Atlantis')).toBe(false)
+    })
   })
 
   it('getMarket carries locale facts for Phase-2 localization', () => {

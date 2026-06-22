@@ -39,6 +39,10 @@ export type Market = {
   tiers: Record<string, DistrictTier>
   /** Hard geographic fence for discovery (Overpass + Places). */
   bbox: Bbox
+  /** When true, NO automated outreach (Email/WhatsApp) is sent for leads in
+   *  this market — the operator contacts every lead by hand. A safe default for
+   *  a newly added city until its per-channel consent path is established. */
+  manualOnly?: boolean
 }
 
 // Lima's box, converted from the Google-shaped LIMA_RECTANGLE.
@@ -93,6 +97,34 @@ const LA_TIERS: Record<string, DistrictTier> = {
   'Sherman Oaks': 'B', 'Mar Vista': 'B', 'Atwater Village': 'B', 'Mid-Wilshire': 'B',
 }
 
+// --- Bogotá (Colombia) — starter list, manual-only -------------------------
+const BOGOTA_DISTRICTS = [
+  'Usaquén', 'Chapinero', 'Chicó', 'Rosales', 'El Nogal', 'Cabrera', 'Country Club',
+  'Zona Rosa', 'Zona T', 'Quinta Camacho', 'Cedritos', 'Teusaquillo', 'Galerías',
+  'Salitre', 'Modelia', 'La Candelaria', 'Santa Fe', 'Macarena', 'Suba', 'Engativá',
+  'Fontibón', 'Kennedy',
+]
+const BOGOTA_TIERS: Record<string, DistrictTier> = {
+  Usaquén: 'A', Chicó: 'A', Rosales: 'A', 'El Nogal': 'A', Cabrera: 'A',
+  'Country Club': 'A', 'Zona Rosa': 'A', 'Zona T': 'A',
+  Chapinero: 'B', 'Quinta Camacho': 'B', Cedritos: 'B', Teusaquillo: 'B',
+  Galerías: 'B', Salitre: 'B', Modelia: 'B',
+}
+
+// --- Buenos Aires (Argentina) — starter list, manual-only ------------------
+const BUENOS_AIRES_DISTRICTS = [
+  'Puerto Madero', 'Recoleta', 'Palermo', 'Belgrano', 'Núñez', 'Barrio Norte',
+  'Las Cañitas', 'Colegiales', 'Villa Crespo', 'Caballito', 'Villa Urquiza',
+  'San Telmo', 'Retiro', 'Almagro', 'Boedo', 'Flores', 'Microcentro', 'Monserrat',
+  'Saavedra', 'Coghlan', 'Villa Devoto',
+]
+const BUENOS_AIRES_TIERS: Record<string, DistrictTier> = {
+  'Puerto Madero': 'A', Recoleta: 'A', Palermo: 'A', Belgrano: 'A', Núñez: 'A',
+  'Barrio Norte': 'A', 'Las Cañitas': 'A',
+  Colegiales: 'B', 'Villa Crespo': 'B', Caballito: 'B', 'Villa Urquiza': 'B',
+  'San Telmo': 'B', Retiro: 'B', Almagro: 'B',
+}
+
 export const MARKETS: Record<string, Market> = {
   Lima: {
     name: 'Lima', country: 'Peru', currency: 'PEN', timezone: 'America/Lima', phoneCode: '51', locale: 'es',
@@ -113,6 +145,18 @@ export const MARKETS: Record<string, Market> = {
     districts: LA_DISTRICTS, tiers: LA_TIERS,
     bbox: { south: 33.7, west: -118.69, north: 34.34, east: -118.12 },
   },
+  // Manual-only markets: discovery + scoring + manual outreach work; automated
+  // Email/WhatsApp stay off (see manualOnly) until a consent path is in place.
+  'Bogotá': {
+    name: 'Bogotá', country: 'Colombia', currency: 'COP', timezone: 'America/Bogota', phoneCode: '57', locale: 'es',
+    districts: BOGOTA_DISTRICTS, tiers: BOGOTA_TIERS, manualOnly: true,
+    bbox: { south: 4.48, west: -74.22, north: 4.84, east: -74.0 },
+  },
+  'Buenos Aires': {
+    name: 'Buenos Aires', country: 'Argentina', currency: 'ARS', timezone: 'America/Argentina/Buenos_Aires', phoneCode: '54', locale: 'es',
+    districts: BUENOS_AIRES_DISTRICTS, tiers: BUENOS_AIRES_TIERS, manualOnly: true,
+    bbox: { south: -34.71, west: -58.53, north: -34.53, east: -58.33 },
+  },
 }
 
 /** Default market for legacy rows / unspecified input. */
@@ -123,6 +167,12 @@ export const MARKET_NAMES = Object.keys(MARKETS)
 
 export function getMarket(city?: string | null): Market | undefined {
   return city ? MARKETS[city.trim()] : undefined
+}
+
+/** Whether a market is flagged manual-only (no automated outreach). Unknown or
+ *  missing city → false (the automated channels then apply their own gates). */
+export function isManualOnlyMarket(city?: string | null): boolean {
+  return getMarket(city)?.manualOnly === true
 }
 
 export function districtsForCity(city?: string | null): string[] {

@@ -21,7 +21,7 @@
 
 import { getTwilioConfig, sendWhatsapp } from './twilio'
 import { getResendConfig, sendEmail, isEmail } from './resend'
-import { getMarket } from './markets'
+import { getMarket, isManualOnlyMarket } from './markets'
 import { emailAllowedForLead } from './contactability'
 import { serverEnv } from './env'
 
@@ -104,6 +104,15 @@ export function buildStatusCallback(eventId?: string): string | undefined {
 
 export async function sendOutreach(input: SendInput): Promise<SendOutcome> {
   const channel = input.channel
+
+  // Manual-only markets (markets.ts): the operator contacts every lead by hand,
+  // so NO channel auto-sends here. Checked first, before any provider call, so
+  // a newly added city can never leak an automated send before its per-channel
+  // consent path exists.
+  if (isManualOnlyMarket(input.city)) {
+    const slug = String(channel).toLowerCase().replace(/\s+/g, '_')
+    return { status: 'manual', reason: `manual_market:${input.city}:${slug}` }
+  }
 
   if (channel === 'WhatsApp') {
     // Compliance gate: automated WhatsApp is Peru-only for now

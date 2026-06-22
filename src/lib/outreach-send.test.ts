@@ -53,3 +53,27 @@ describe('sendOutreach — WhatsApp gate is enforced before any provider call', 
     if (out.status !== 'sent') expect(out.reason).not.toContain('whatsapp_gated')
   })
 })
+
+describe('sendOutreach — manual-only markets never auto-send on any channel', () => {
+  it('returns manual for Email in a manual-only market (even a permissive-email country)', async () => {
+    const out = await sendOutreach({
+      channel: 'Email',
+      body: 'hola',
+      email: 'owner@negocio.com.co',
+      city: 'Bogotá',
+    })
+    expect(out.status).toBe('manual')
+    expect(out.status === 'manual' && out.reason).toContain('manual_market:Bogotá')
+  })
+
+  it('returns manual for WhatsApp in a manual-only market', async () => {
+    const out = await sendOutreach({
+      channel: 'WhatsApp',
+      body: 'hola',
+      phone: '+541199998888',
+      city: 'Buenos Aires',
+    })
+    expect(out.status).toBe('manual')
+    expect(out.status === 'manual' && out.reason).toContain('manual_market:Buenos Aires')
+  })
+})
