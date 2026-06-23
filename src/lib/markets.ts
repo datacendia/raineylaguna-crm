@@ -125,6 +125,54 @@ const BUENOS_AIRES_TIERS: Record<string, DistrictTier> = {
   'San Telmo': 'B', Retiro: 'B', Almagro: 'B',
 }
 
+// --- Santiago (Chile) — starter list, manual-only -------------------------
+const SANTIAGO_DISTRICTS = [
+  'Las Condes', 'Vitacura', 'Lo Barnechea', 'Providencia', 'Ñuñoa', 'La Reina',
+  'Santiago Centro', 'Lastarria', 'Barrio Italia', 'Bellavista', 'Macul',
+  'San Miguel', 'Recoleta', 'Independencia', 'Maipú', 'La Florida', 'Peñalolén',
+  'Estación Central', 'Quinta Normal',
+]
+const SANTIAGO_TIERS: Record<string, DistrictTier> = {
+  'Las Condes': 'A', Vitacura: 'A', 'Lo Barnechea': 'A', Providencia: 'A',
+  Ñuñoa: 'B', 'La Reina': 'B', 'Santiago Centro': 'B', Lastarria: 'B',
+  'Barrio Italia': 'B', Bellavista: 'B',
+}
+
+// --- Montevideo (Uruguay) — starter list, manual-only ---------------------
+const MONTEVIDEO_DISTRICTS = [
+  'Carrasco', 'Punta Carretas', 'Pocitos', 'Punta Gorda', 'Buceo', 'Malvín',
+  'Cordón', 'Centro', 'Ciudad Vieja', 'Parque Rodó', 'Tres Cruces', 'Prado',
+  'La Blanqueada', 'Aguada', 'Palermo', 'Parque Batlle', 'Cerrito',
+]
+const MONTEVIDEO_TIERS: Record<string, DistrictTier> = {
+  Carrasco: 'A', 'Punta Carretas': 'A', Pocitos: 'A', 'Punta Gorda': 'A',
+  Buceo: 'B', Malvín: 'B', Cordón: 'B', 'Parque Rodó': 'B', Centro: 'B',
+  'Parque Batlle': 'B',
+}
+
+// --- Medellín (Colombia) — starter list, manual-only ----------------------
+const MEDELLIN_DISTRICTS = [
+  'El Poblado', 'Provenza', 'Manila', 'Envigado', 'Laureles', 'Conquistadores',
+  'Estadio', 'Sabaneta', 'Belén', 'La América', 'El Centro', 'Buenos Aires',
+  'Robledo', 'Itagüí', 'La Floresta', 'Castropol',
+]
+const MEDELLIN_TIERS: Record<string, DistrictTier> = {
+  'El Poblado': 'A', Provenza: 'A', Manila: 'A', Envigado: 'A', Castropol: 'A',
+  Laureles: 'B', Conquistadores: 'B', Estadio: 'B', Sabaneta: 'B', 'La Floresta': 'B',
+}
+
+// --- Quito (Ecuador) — starter list, manual-only --------------------------
+const QUITO_DISTRICTS = [
+  'Cumbayá', 'González Suárez', 'La Carolina', 'Quito Tenis', 'La Floresta',
+  'El Batán', 'La Coruña', 'Bellavista', 'La Mariscal', 'La Pradera',
+  'Centro Histórico', 'Guápulo', 'El Bosque', 'Iñaquito', 'La Carolina Norte',
+]
+const QUITO_TIERS: Record<string, DistrictTier> = {
+  Cumbayá: 'A', 'González Suárez': 'A', 'La Carolina': 'A', 'Quito Tenis': 'A',
+  'La Floresta': 'B', 'El Batán': 'B', 'La Coruña': 'B', Bellavista: 'B',
+  Iñaquito: 'B', 'La Mariscal': 'B',
+}
+
 export const MARKETS: Record<string, Market> = {
   Lima: {
     name: 'Lima', country: 'Peru', currency: 'PEN', timezone: 'America/Lima', phoneCode: '51', locale: 'es',
@@ -156,6 +204,26 @@ export const MARKETS: Record<string, Market> = {
     name: 'Buenos Aires', country: 'Argentina', currency: 'ARS', timezone: 'America/Argentina/Buenos_Aires', phoneCode: '54', locale: 'es',
     districts: BUENOS_AIRES_DISTRICTS, tiers: BUENOS_AIRES_TIERS, manualOnly: true,
     bbox: { south: -34.71, west: -58.53, north: -34.53, east: -58.33 },
+  },
+  Santiago: {
+    name: 'Santiago', country: 'Chile', currency: 'CLP', timezone: 'America/Santiago', phoneCode: '56', locale: 'es',
+    districts: SANTIAGO_DISTRICTS, tiers: SANTIAGO_TIERS, manualOnly: true,
+    bbox: { south: -33.65, west: -70.82, north: -33.3, east: -70.5 },
+  },
+  Montevideo: {
+    name: 'Montevideo', country: 'Uruguay', currency: 'UYU', timezone: 'America/Montevideo', phoneCode: '598', locale: 'es',
+    districts: MONTEVIDEO_DISTRICTS, tiers: MONTEVIDEO_TIERS, manualOnly: true,
+    bbox: { south: -34.95, west: -56.43, north: -34.82, east: -56.03 },
+  },
+  'Medellín': {
+    name: 'Medellín', country: 'Colombia', currency: 'COP', timezone: 'America/Bogota', phoneCode: '57', locale: 'es',
+    districts: MEDELLIN_DISTRICTS, tiers: MEDELLIN_TIERS, manualOnly: true,
+    bbox: { south: 6.13, west: -75.64, north: 6.34, east: -75.52 },
+  },
+  Quito: {
+    name: 'Quito', country: 'Ecuador', currency: 'USD', timezone: 'America/Guayaquil', phoneCode: '593', locale: 'es',
+    districts: QUITO_DISTRICTS, tiers: QUITO_TIERS, manualOnly: true,
+    bbox: { south: -0.35, west: -78.58, north: -0.02, east: -78.4 },
   },
 }
 

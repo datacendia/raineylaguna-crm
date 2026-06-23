@@ -84,6 +84,24 @@ describe('markets', () => {
       expect(isManualOnlyMarket(undefined)).toBe(false)
       expect(isManualOnlyMarket('Atlantis')).toBe(false)
     })
+
+    it('registers the new South American cities as manual-only es markets', () => {
+      const newCities: Array<[string, string]> = [
+        ['Santiago', 'Chile'],
+        ['Montevideo', 'Uruguay'],
+        ['Medellín', 'Colombia'],
+        ['Quito', 'Ecuador'],
+      ]
+      for (const [city, country] of newCities) {
+        const m = getMarket(city)
+        expect(m, `${city} should be registered`).toBeDefined()
+        expect(m?.country).toBe(country)
+        expect(m?.locale).toBe('es')
+        expect(isManualOnlyMarket(city)).toBe(true)
+        // Each ships at least one premium (tier A) district to anchor scoring.
+        expect(Object.values(m!.tiers)).toContain('A')
+      }
+    })
   })
 
   it('getMarket carries locale facts for Phase-2 localization', () => {
