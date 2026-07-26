@@ -12,6 +12,7 @@
     "worker": "tsx scripts/outreach-worker.ts",
     "outreach-drain": "tsx scripts/outreach-drain.ts",
     "migrate": "tsx scripts/migrate.ts",
+    "calibrate": "tsx scripts/calibrate-priority.ts",
     "draft-outreach-cron": "tsx scripts/draft-outreach-cron.ts",
     "sync-sereno": "tsx scripts/sync-sereno-customers.ts",
     "digest-email": "tsx scripts/digest-email-cron.ts",
