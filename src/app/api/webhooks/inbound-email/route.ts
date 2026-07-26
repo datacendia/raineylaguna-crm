@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import pool from '@/lib/db'
 import { serverEnv } from '@/lib/env'
+import { isOptOut, suppress } from '@/lib/suppression'
 
 export const runtime = 'nodejs'
 
@@ -24,6 +25,33 @@ function constantTimeEqual(a: string, b: string): boolean {
   const bb = Buffer.from(b)
   if (ab.length !== bb.length) return false
   return timingSafeEqual(ab, bb)
+}
+
+/**
+ * The visible part of an email reply — everything above the quoted original.
+ *
+ * This matters for opt-out detection. `isOptOut` matches whole messages only
+ * (so "no me gusta el stop motion" isn't read as an opt-out), but a real email
+ * reply is almost never just the word: it's "BAJA" followed by the entire
+ * thread quoted underneath. Without trimming that, a genuine opt-out would
+ * never match and the person would keep being emailed.
+ *
+ * Cuts at the first quote marker: a `>` line, or an attribution line in
+ * English or Spanish ("On … wrote:", "El … escribió:"), or Outlook's divider.
+ */
+function topOfReply(text: string): string {
+  const lines = text.split(/\r?\n/)
+  const out: string[] = []
+  for (const line of lines) {
+    const l = line.trim()
+    if (l.startsWith('>')) break
+    if (/^-{2,}\s*(original message|mensaje original)/i.test(l)) break
+    if (/^_{5,}$/.test(l)) break
+    if (/^(on|el)\b.*\b(wrote|escribió|escribio):$/i.test(l)) break
+    if (/^de:\s|^from:\s/i.test(l) && out.length > 0) break
+    out.push(line)
+  }
+  return out.join('\n').trim()
 }
 
 export async function POST(req: NextRequest) {
@@ -51,10 +79,37 @@ export async function POST(req: NextRequest) {
         ORDER BY updated_at DESC LIMIT 1`,
       [from],
     )
-    if (leadRes.rows.length === 0) {
+    const leadId = leadRes.rows[0]?.id ?? null
+
+    // ── Opt-out ──────────────────────────────────────────────────────────────
+    // Checked BEFORE the no-match drop below, and deliberately so: someone who
+    // says "unsubscribe" from an address we don't currently hold as a lead must
+    // still be suppressed, or the next import re-adds them and we message
+    // someone who already told us not to.
+    const replyTop = topOfReply(body.text ?? '')
+    if (isOptOut(replyTop) || isOptOut(body.subject ?? '')) {
+      await suppress(pool, {
+        email: from,
+        reason: 'opt_out',
+        source: 'email',
+        leadId,
+        note: replyTop.slice(0, 500) || (body.subject ?? '').slice(0, 500),
+      })
+      if (leadId) {
+        await pool.query(
+          `UPDATE crm_outreach_events
+              SET status = 'Not Interested', failed_reason = 'opt_out:email'
+            WHERE lead_id = $1 AND status = 'Pending'`,
+          [leadId],
+        )
+      }
+      console.log(`[webhooks/inbound-email] opt-out recorded for ${from}`)
+      return NextResponse.json({ ok: true, matched: Boolean(leadId), opted_out: true })
+    }
+
+    if (!leadId) {
       return NextResponse.json({ ok: true, matched: false })
     }
-    const leadId = leadRes.rows[0].id
 
     const snippet = [
       `↩ Reply ${new Date().toISOString()}`,

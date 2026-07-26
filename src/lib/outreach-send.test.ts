@@ -1,4 +1,13 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+
+// sendOutreach checks the do-not-contact list before anything else, which needs
+// a database. These tests are about the gates, not about suppression, so stand
+// in a pool that reports "not suppressed" and let the real gate logic run.
+// suppression.test.ts covers the list itself.
+vi.mock('./db', () => ({
+  default: { query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }) },
+}))
+
 import { whatsappAllowedForCity, sendOutreach } from './outreach-send'
 
 describe('whatsappAllowedForCity — automated-WhatsApp compliance gate', () => {
