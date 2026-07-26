@@ -64,6 +64,27 @@ export async function proxy(request: NextRequest) {
   return NextResponse.next()
 }
 
+// Everything not listed here bypasses the session gate entirely, so adding a
+// route under /api that reads lead data WITHOUT adding it here silently
+// publishes that data. /api/analytics was exactly that: it returns named leads,
+// their districts, health scores and generated pitch copy, and was reachable
+// unauthenticated until it was added below.
+//
+// Genuinely-public exceptions are /api/health, /api/auth/* (handled above),
+// /api/leads/public (own shared secret) and /api/webhooks/* (own shared
+// secrets) — those are deliberately outside the matcher.
 export const config = {
-  matcher: ['/dashboard/:path*', '/login', '/api/leads/:path*', '/api/outreach/:path*', '/api/video-audits/:path*', '/api/import', '/api/stats', '/api/batch', '/api/drafts', '/api/drafts/:path*'],
+  matcher: [
+    '/dashboard/:path*',
+    '/login',
+    '/api/analytics',
+    '/api/leads/:path*',
+    '/api/outreach/:path*',
+    '/api/video-audits/:path*',
+    '/api/import',
+    '/api/stats',
+    '/api/batch',
+    '/api/drafts',
+    '/api/drafts/:path*',
+  ],
 }

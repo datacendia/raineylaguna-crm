@@ -128,10 +128,25 @@ export function createDistributedRateLimiter(
   return { check, reset, backend: () => (useRedis ? 'redis' : 'memory') };
 }
 
+/**
+ * Best trusted client IP for rate-limiting.
+ *
+ * `x-forwarded-for` is client-settable, so preferring it lets an attacker
+ * rotate fake values and defeat the limiter — which matters most on the login
+ * route, where the limiter is the brute-force protection. Proxy-written headers
+ * (`cf-connecting-ip`, then `x-real-ip`) cannot be forged by the origin client,
+ * so they win; `x-forwarded-for` is only a last resort for deployments that set
+ * neither.
+ *
+ * This deliberately mirrors `clientIp()` in raineylaguna-next/src/lib/client-ip.ts.
+ * The two had drifted, and this side was the insecure one. Keep them in step.
+ */
 export function ipFromHeaders(headers: { get(name: string): string | null }): string {
-  const fwd = headers.get('x-forwarded-for');
-  if (fwd) return fwd.split(',')[0].trim();
+  const cf = headers.get('cf-connecting-ip');
+  if (cf) return cf.trim();
   const real = headers.get('x-real-ip');
   if (real) return real.trim();
+  const fwd = headers.get('x-forwarded-for');
+  if (fwd) return fwd.split(',')[0].trim();
   return 'unknown';
 }

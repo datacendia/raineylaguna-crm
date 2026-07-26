@@ -6,12 +6,15 @@
  * `@anthropic-ai/sdk`.
  *
  * Required env: ANTHROPIC_API_KEY
- * Optional env: ANTHROPIC_MODEL (default: claude-3-5-sonnet-20241022)
+ * Optional env: ANTHROPIC_MODEL (default: claude-opus-4-8)
  */
 
 import { serverEnv } from '@/lib/env'
 
-const DEFAULT_MODEL = 'claude-3-5-sonnet-20241022'
+// claude-3-5-sonnet-20241022 was retired on 2025-10-28 and now 404s, so the
+// previous default meant every AI call failed unless ANTHROPIC_MODEL happened
+// to be set — and .env.example ships it blank.
+const DEFAULT_MODEL = 'claude-opus-4-8'
 const ENDPOINT = 'https://api.anthropic.com/v1/messages'
 
 export interface CompletionParams {

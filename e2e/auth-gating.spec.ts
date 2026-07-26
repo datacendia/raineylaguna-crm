@@ -21,10 +21,19 @@ const PROTECTED_PAGES = [
   '/dashboard/digest',
 ]
 
+// Every API route that reads lead data must appear here. A route is only gated
+// if it is listed in `config.matcher` in src/proxy.ts — nothing else enforces
+// auth — so this list is the regression test for that matcher.
+//
+// /api/analytics is the reason this comment exists: it returns named leads with
+// their districts, health scores and generated pitch copy, and was missing from
+// the matcher, so it answered unauthenticated to anyone on the internet.
 const PROTECTED_APIS = [
+  '/api/analytics',
   '/api/drafts',
   '/api/stats',
   '/api/outreach',
+  '/api/leads',
   '/api/leads/export',
 ]
 
