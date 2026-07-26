@@ -173,57 +173,95 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: 'email or phone required' }, { status: 400 })
   }
 
-  // De-dupe by email or phone
-  const existing = await pool.query(
-    `SELECT id, notes FROM crm_leads
-     WHERE (email IS NOT NULL AND email = $1)
-        OR (phone IS NOT NULL AND phone = $2)
-     LIMIT 1`,
-    [email, phone],
-  )
+  // ── De-dupe by email or phone, serialised per contact ────────────────────
+  //
+  // This is a check-then-act: SELECT, then either UPDATE or INSERT. Two form
+  // submissions for the same contact arriving together could both find nothing
+  // and both insert.
+  //
+  // A UNIQUE constraint on email/phone would be the obvious backstop and is the
+  // WRONG tool here. This dataset legitimately shares contacts across rows:
+  // 244 leads share Lindcorp's address (Tambo's parent), 31 share OXXO's
+  // corporate line, 50 share Tiendas Mass — 236 email and 667 phone groups in
+  // total. They are separate branches of a chain, not duplicate records, and
+  // 2026-06-03-franchise-flag.sql already recognises exactly this pattern
+  // ("a phone or email shared by >= 3 leads is almost always a corporate
+  // line"). A unique index would reject those imports outright.
+  //
+  // So serialise instead of constrain: take a transaction-scoped advisory lock
+  // keyed on the contact. Concurrent submissions for the SAME contact queue up
+  // and the second one sees the first one's row; submissions for different
+  // contacts never touch each other, and bulk chain imports are unaffected
+  // because they don't come through this endpoint.
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    // hashtext() is stable within a major version, which is all we need — the
+    // lock only has to be consistent for the lifetime of concurrent requests.
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+      `lead-intake:${email ?? ''}|${phone ?? ''}`,
+    ])
 
-  if (existing.rowCount && existing.rows[0]) {
-    const row = existing.rows[0]
-    const merged = [row.notes, notes && `[${new Date().toISOString().slice(0, 10)}] ${notes}`]
-      .filter(Boolean)
-      .join('\n\n')
-    // Keep first-touch source attribution; only fill website_url when missing;
-    // only write the audit when the lead has no prior (possibly richer,
-    // CRM-run) audit — never clobber one.
-    await pool.query(
-      `UPDATE crm_leads
-          SET notes = $1,
-              source = COALESCE(source, $3),
-              website_url = COALESCE(website_url, $4),
-              digital_health_score =
-                CASE WHEN audited_at IS NULL AND $6::jsonb IS NOT NULL
-                     THEN $5 ELSE digital_health_score END,
-              audit_findings =
-                CASE WHEN audited_at IS NULL AND $6::jsonb IS NOT NULL
-                     THEN $6::jsonb ELSE audit_findings END,
-              audited_at =
-                CASE WHEN audited_at IS NULL AND $6::jsonb IS NOT NULL
-                     THEN NOW() ELSE audited_at END,
-              updated_at = NOW()
-        WHERE id = $2`,
-      [merged, row.id, source, websiteUrl, auditScore, auditFindingsJson],
+    const existing = await client.query(
+      `SELECT id, notes FROM crm_leads
+       WHERE (email IS NOT NULL AND email = $1)
+          OR (phone IS NOT NULL AND phone = $2)
+       LIMIT 1`,
+      [email, phone],
     )
-    return NextResponse.json({ ok: true, id: row.id, deduped: true })
+
+    if (existing.rowCount && existing.rows[0]) {
+      const row = existing.rows[0]
+      const merged = [row.notes, notes && `[${new Date().toISOString().slice(0, 10)}] ${notes}`]
+        .filter(Boolean)
+        .join('\n\n')
+      // Keep first-touch source attribution; only fill website_url when missing;
+      // only write the audit when the lead has no prior (possibly richer,
+      // CRM-run) audit — never clobber one.
+      await client.query(
+        `UPDATE crm_leads
+            SET notes = $1,
+                source = COALESCE(source, $3),
+                website_url = COALESCE(website_url, $4),
+                digital_health_score =
+                  CASE WHEN audited_at IS NULL AND $6::jsonb IS NOT NULL
+                       THEN $5 ELSE digital_health_score END,
+                audit_findings =
+                  CASE WHEN audited_at IS NULL AND $6::jsonb IS NOT NULL
+                       THEN $6::jsonb ELSE audit_findings END,
+                audited_at =
+                  CASE WHEN audited_at IS NULL AND $6::jsonb IS NOT NULL
+                       THEN NOW() ELSE audited_at END,
+                updated_at = NOW()
+          WHERE id = $2`,
+        [merged, row.id, source, websiteUrl, auditScore, auditFindingsJson],
+      )
+      await client.query('COMMIT')
+      return NextResponse.json({ ok: true, id: row.id, deduped: true })
+    }
+
+    const inserted = await client.query(
+      `INSERT INTO crm_leads
+         (name, email, phone, district, niche, notes, source, pipeline_stage,
+          website_url, digital_health_score, audit_findings, audited_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'Lead',
+               $8, $9, $10::jsonb,
+               CASE WHEN $10::jsonb IS NOT NULL THEN NOW() ELSE NULL END)
+       RETURNING id`,
+      [name, email, phone, district, niche, notes, source, websiteUrl, auditScore, auditFindingsJson],
+    )
+    await client.query('COMMIT')
+
+    return NextResponse.json(
+      { ok: true, id: inserted.rows[0].id, deduped: false },
+      { status: 201 },
+    )
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    // Releasing the client also releases the advisory lock, since it is
+    // transaction-scoped (pg_advisory_xact_lock, not the session variant).
+    client.release()
   }
-
-  const inserted = await pool.query(
-    `INSERT INTO crm_leads
-       (name, email, phone, district, niche, notes, source, pipeline_stage,
-        website_url, digital_health_score, audit_findings, audited_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'Lead',
-             $8, $9, $10::jsonb,
-             CASE WHEN $10::jsonb IS NOT NULL THEN NOW() ELSE NULL END)
-     RETURNING id`,
-    [name, email, phone, district, niche, notes, source, websiteUrl, auditScore, auditFindingsJson],
-  )
-
-  return NextResponse.json(
-    { ok: true, id: inserted.rows[0].id, deduped: false },
-    { status: 201 },
-  )
 }

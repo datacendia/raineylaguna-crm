@@ -24,6 +24,8 @@ import { getResendConfig, sendEmail, isEmail } from './resend'
 import { getMarket, isManualOnlyMarket } from './markets'
 import { emailAllowedForLead } from './contactability'
 import { serverEnv } from './env'
+import pool from './db'
+import { isSuppressed } from './suppression'
 
 export type Channel = 'Email' | 'Instagram DM' | 'WhatsApp' | 'LinkedIn'
 
@@ -66,6 +68,13 @@ export type SendOutcome =
   | { status: 'pending'; reason: string }
   /** Channel has no API; operator must send manually then mark it. */
   | { status: 'manual'; reason: string }
+  /**
+   * Recipient is on the do-not-contact list. TERMINAL — never retry, and never
+   * hand to the operator to send by hand either. Distinct from `pending` for
+   * exactly that reason: a suppressed contact that came back as `pending` would
+   * be re-attempted on the next drain, which is the failure this prevents.
+   */
+  | { status: 'suppressed'; reason: string }
 
 export interface SendInput {
   channel: Channel | string
@@ -104,6 +113,27 @@ export function buildStatusCallback(eventId?: string): string | undefined {
 
 export async function sendOutreach(input: SendInput): Promise<SendOutcome> {
   const channel = input.channel
+
+  // Do-not-contact, checked before EVERYTHING else — before the market gate,
+  // before any provider call, and on every channel including the manual ones.
+  // Someone who asked not to be contacted must not be messaged by hand either,
+  // so this deliberately sits above the manual-market branch below.
+  //
+  // Fails CLOSED but RECOVERABLY, and the difference matters enormously:
+  //   found      -> 'suppressed', which the drain treats as TERMINAL.
+  //   lookup err -> 'pending', which is retryable.
+  // Returning 'suppressed' on a failed lookup would mean a momentary database
+  // blip during a drain permanently marks every queued event 'Not Interested'
+  // with no way back. We still refuse to send, we just don't burn the queue.
+  try {
+    if (await isSuppressed(pool, { email: input.email, phone: input.phone })) {
+      return { status: 'suppressed', reason: 'do_not_contact' }
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown'
+    console.error('[outreach-send] suppression lookup failed, refusing to send:', msg)
+    return { status: 'pending', reason: `suppression_check_failed:${msg}` }
+  }
 
   // Manual-only markets (markets.ts): the operator contacts every lead by hand,
   // so NO channel auto-sends here. Checked first, before any provider call, so

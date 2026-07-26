@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import pool from '@/lib/db'
 import { serverEnv } from '@/lib/env'
+import { isOptOut, suppress } from '@/lib/suppression'
 
 export const runtime = 'nodejs'
 
@@ -49,6 +50,58 @@ export async function POST(req: NextRequest) {
   const messageStatus = String(form.get('MessageStatus') ?? form.get('SmsStatus') ?? '').toLowerCase()
   const messageSid = form.get('MessageSid') ? String(form.get('MessageSid')) : null
   const errorCode = form.get('ErrorCode') ? String(form.get('ErrorCode')) : null
+
+  // ── Inbound message (not a status callback) ──────────────────────────────
+  // Twilio posts inbound WhatsApp/SMS to a webhook with Body + From and NO
+  // MessageStatus. Previously this route only understood status callbacks, so
+  // a reply of "BAJA" was parsed as nothing, stored as nothing, and the next
+  // scheduled send went out regardless. Handle it before the status path.
+  const inboundBody = form.get('Body') ? String(form.get('Body')) : null
+  const inboundFrom = form.get('From') ? String(form.get('From')) : null
+  if (!messageStatus && inboundBody !== null && inboundFrom) {
+    // "whatsapp:+51987654321" → digits, matching how leads store phone.
+    const phone = inboundFrom.replace(/^whatsapp:/i, '')
+    if (!isOptOut(inboundBody)) {
+      // A genuine reply. Record interest so the operator sees it; do not
+      // suppress — they engaged, which is the opposite of opting out.
+      await pool.query(
+        `UPDATE crm_outreach_events e
+            SET status = 'Replied', updated_at = NOW()
+          FROM crm_leads l
+         WHERE e.lead_id = l.id
+           AND regexp_replace(COALESCE(l.phone,''), '\\D', '', 'g') = regexp_replace($1, '\\D', '', 'g')
+           AND e.status IN ('Sent','Opened')`,
+        [phone],
+      )
+      return NextResponse.json({ ok: true, inbound: 'reply' })
+    }
+
+    const lead = await pool.query<{ id: string }>(
+      `SELECT id FROM crm_leads
+        WHERE regexp_replace(COALESCE(phone,''), '\\D', '', 'g') = regexp_replace($1, '\\D', '', 'g')
+        LIMIT 1`,
+      [phone],
+    )
+    await suppress(pool, {
+      phone,
+      reason: 'opt_out',
+      source: 'whatsapp',
+      leadId: lead.rows[0]?.id ?? null,
+      note: inboundBody.slice(0, 500),
+    })
+    // Stop anything already queued for this person.
+    await pool.query(
+      `UPDATE crm_outreach_events e
+          SET status = 'Not Interested', failed_reason = 'opt_out:whatsapp'
+        FROM crm_leads l
+       WHERE e.lead_id = l.id
+         AND regexp_replace(COALESCE(l.phone,''), '\\D', '', 'g') = regexp_replace($1, '\\D', '', 'g')
+         AND e.status = 'Pending'`,
+      [phone],
+    )
+    console.log(`[webhooks/twilio] opt-out recorded for ${phone}`)
+    return NextResponse.json({ ok: true, inbound: 'opt_out' })
+  }
 
   // Locate the event: prefer the correlation id we attached, fall back to SID.
   const where = eventId ? 'id = $1' : 'provider_message_id = $1'

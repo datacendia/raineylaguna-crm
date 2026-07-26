@@ -15,6 +15,20 @@
  *   - One attempt per event: any non-sent outcome (deferred / manual /
  *     exception) writes failed_reason, which removes the row from re-selection.
  *     No retry storms, no infinite loops. The operator can re-trigger if needed.
+ *   - AT-MOST-ONCE delivery, deliberately. Each event is claimed as Sent in a
+ *     short transaction BEFORE the provider is called, and the provider call
+ *     then happens outside any transaction. Previously the send sat between
+ *     BEGIN and COMMIT, so a redeploy (SIGTERM) landing mid-send rolled the row
+ *     back to Pending after the message had already gone out — and the next
+ *     drain sent it again.
+ *
+ *     The trade is explicit: a crash between claim and send loses that one
+ *     message rather than duplicating it. For cold outreach that is the correct
+ *     direction — a duplicate is the behavioural signature of a spam bot, and
+ *     complaints feed the SES/Twilio thresholds that can suspend sending
+ *     entirely. Losing one low-probability prospect is cheaper than putting the
+ *     sending domain at risk. (For transactional mail you would want the
+ *     opposite: an in-flight 'Sending' state and at-least-once.)
  *   - Staleness guard: events whose scheduled_for is older than
  *     OUTREACH_DRAIN_GRACE_HOURS (default 12) are NOT auto-sent, so turning the
  *     cron on never blasts a backlog that accumulated while nothing was
@@ -75,24 +89,59 @@ const SELECT_NEXT_DUE = `
    LIMIT 1
    FOR UPDATE OF e SKIP LOCKED`
 
-async function markSent(client: PoolClient, id: string, providerId?: string) {
+/**
+ * Optimistically claim the event as Sent BEFORE the provider is called.
+ *
+ * This is the at-most-once half of the design (see the header note). Once this
+ * commits, the row is no longer selectable by any drain, so a crash during the
+ * provider call can never produce a second send.
+ */
+async function claimAsSent(client: PoolClient, id: string) {
   await client.query(
     `UPDATE crm_outreach_events
-        SET status = 'Sent', sent_at = NOW(),
-            provider_message_id = COALESCE($2, provider_message_id),
-            failed_reason = NULL
+        SET status = 'Sent', sent_at = NOW(), failed_reason = NULL
       WHERE id = $1`,
-    [id, providerId ?? null],
+    [id],
   )
 }
 
-async function markDeferred(client: PoolClient, id: string, reason: string) {
-  // Event stays Pending; failed_reason both records why and excludes the row
-  // from re-selection so we never re-attempt the same failure every run.
-  await client.query(`UPDATE crm_outreach_events SET failed_reason = $2 WHERE id = $1`, [
-    id,
-    reason.slice(0, 500),
-  ])
+/** Attach the provider's message id once the send actually succeeded. */
+async function recordProviderId(db: Pool, id: string, providerId?: string) {
+  if (!providerId) return
+  await db.query(
+    `UPDATE crm_outreach_events
+        SET provider_message_id = COALESCE($2, provider_message_id)
+      WHERE id = $1`,
+    [id, providerId],
+  )
+}
+
+/**
+ * The send did not happen after all — release the optimistic claim so the row
+ * reflects reality. status returns to Pending, and failed_reason both records
+ * why and excludes it from re-selection, matching the pre-existing contract.
+ */
+async function releaseClaim(db: Pool, id: string, reason: string) {
+  await db.query(
+    `UPDATE crm_outreach_events
+        SET status = 'Pending', sent_at = NULL, failed_reason = $2
+      WHERE id = $1`,
+    [id, reason.slice(0, 500)],
+  )
+}
+
+/**
+ * Recipient is on the do-not-contact list. Terminal: move the event out of
+ * Pending entirely rather than leaving it deferred, so it stops appearing in
+ * backlog counts and can never be revived by clearing failed_reason.
+ */
+async function markSuppressed(db: Pool, id: string, reason: string) {
+  await db.query(
+    `UPDATE crm_outreach_events
+        SET status = 'Not Interested', sent_at = NULL, failed_reason = $2
+      WHERE id = $1`,
+    [id, reason.slice(0, 500)],
+  )
 }
 
 async function staleBacklog(pool: Pool): Promise<number> {
@@ -129,13 +178,19 @@ async function dryRun(pool: Pool, stale: number) {
   console.log('[outreach-drain] DRY_RUN: nothing sent.')
 }
 
-async function drainLive(pool: Pool): Promise<{ sent: number; deferred: number }> {
+async function drainLive(pool: Pool): Promise<{ sent: number; deferred: number; suppressed: number }> {
   let sent = 0
   let deferred = 0
+  let suppressed = 0
   let processed = 0
 
   while (processed < MAX) {
+    // ── Phase 1: claim ──────────────────────────────────────────────────────
+    // Short transaction. Lock the next due row and mark it Sent BEFORE anything
+    // leaves the process. Nothing slow happens inside here — no network, no
+    // provider call — so the transaction is held for microseconds.
     const client = await pool.connect()
+    let ev: DueEvent | null = null
     try {
       await client.query('BEGIN')
       const { rows } = await client.query<DueEvent>(SELECT_NEXT_DUE, [String(GRACE_HOURS)])
@@ -143,46 +198,62 @@ async function drainLive(pool: Pool): Promise<{ sent: number; deferred: number }
         await client.query('ROLLBACK')
         break
       }
-      const ev = rows[0]
-      processed++
-      try {
-        const outcome = await sendOutreach({
-          channel: ev.channel,
-          body: ev.body ?? '',
-          subject: ev.subject,
-          phone: ev.phone,
-          email: ev.email,
-          city: ev.city,
-          eventId: ev.id,
-        })
-        if (outcome.status === 'sent') {
-          await markSent(client, ev.id, outcome.providerId)
-          sent++
-          console.log(`  ✓ sent ${ev.channel} -> lead ${ev.lead_id} (${outcome.providerId ?? 'no-id'})`)
-        } else {
-          await markDeferred(client, ev.id, outcome.reason)
-          deferred++
-          console.log(`  · defer ${ev.channel} -> lead ${ev.lead_id} (${outcome.status}: ${outcome.reason})`)
-        }
-        await client.query('COMMIT')
-      } catch (sendErr) {
-        // Unexpected throw from the dispatcher: stamp it so we don't loop on the
-        // same row forever, then keep draining the rest.
-        const msg = sendErr instanceof Error ? sendErr.message : 'unknown'
-        await markDeferred(client, ev.id, `exception:${msg}`)
-        deferred++
-        await client.query('COMMIT')
-        console.error(`  ! error ${ev.channel} -> lead ${ev.lead_id}: ${msg}`)
-      }
+      ev = rows[0]
+      await claimAsSent(client, ev.id)
+      await client.query('COMMIT')
     } catch (txErr) {
       await client.query('ROLLBACK').catch(() => {})
       throw txErr
     } finally {
       client.release()
     }
+    if (!ev) break
+    processed++
+
+    // ── Phase 2: send ───────────────────────────────────────────────────────
+    // Deliberately OUTSIDE any transaction. A provider call is irreversible;
+    // Postgres can roll back its half but Twilio cannot roll back a delivered
+    // WhatsApp message. Holding a transaction across this is what allowed a
+    // redeploy mid-send to resurrect the row and message the prospect twice.
+    let outcome
+    try {
+      outcome = await sendOutreach({
+        channel: ev.channel,
+        body: ev.body ?? '',
+        subject: ev.subject,
+        phone: ev.phone,
+        email: ev.email,
+        city: ev.city,
+        eventId: ev.id,
+      })
+    } catch (sendErr) {
+      const msg = sendErr instanceof Error ? sendErr.message : 'unknown'
+      await releaseClaim(pool, ev.id, `exception:${msg}`)
+      deferred++
+      console.error(`  ! error ${ev.channel} -> lead ${ev.lead_id}: ${msg}`)
+      continue
+    }
+
+    // ── Phase 3: reconcile ──────────────────────────────────────────────────
+    // The claim was optimistic, so anything other than a real send has to be
+    // walked back. A crash before reaching here leaves the row claimed and the
+    // message unsent — the accepted at-most-once cost.
+    if (outcome.status === 'sent') {
+      await recordProviderId(pool, ev.id, outcome.providerId)
+      sent++
+      console.log(`  ✓ sent ${ev.channel} -> lead ${ev.lead_id} (${outcome.providerId ?? 'no-id'})`)
+    } else if (outcome.status === 'suppressed') {
+      await markSuppressed(pool, ev.id, outcome.reason)
+      suppressed++
+      console.log(`  ⊘ suppressed ${ev.channel} -> lead ${ev.lead_id} (${outcome.reason})`)
+    } else {
+      await releaseClaim(pool, ev.id, outcome.reason)
+      deferred++
+      console.log(`  · defer ${ev.channel} -> lead ${ev.lead_id} (${outcome.status}: ${outcome.reason})`)
+    }
   }
 
-  return { sent, deferred }
+  return { sent, deferred, suppressed }
 }
 
 async function main() {
@@ -200,8 +271,10 @@ async function main() {
     console.log(
       `[outreach-drain] ${new Date().toISOString()} | grace_h=${GRACE_HOURS} cap=${MAX} stale_skipped=${stale}`,
     )
-    const { sent, deferred } = await drainLive(pool)
-    console.log(`[outreach-drain] done | sent=${sent} deferred=${deferred}`)
+    const { sent, deferred, suppressed } = await drainLive(pool)
+    console.log(
+      `[outreach-drain] done | sent=${sent} deferred=${deferred} suppressed=${suppressed}`,
+    )
   } finally {
     await pool.end()
   }
