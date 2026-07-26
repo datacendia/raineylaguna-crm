@@ -44,8 +44,23 @@ describe("POST /api/leads/public", () => {
     process.env.CRM_LEAD_INTAKE_SECRET = SECRET;
     queryMock.mockReset();
     vi.resetModules();
+    // The route now wraps its dedupe in a transaction and takes an advisory
+    // lock, so it calls pool.connect() and issues BEGIN / pg_advisory_xact_lock
+    // / COMMIT around the real work. Those are plumbing, not behaviour: filter
+    // them out here so `queryMock.mock.calls[0]` stays the dedupe SELECT and
+    // `[1]` stays the INSERT/UPDATE, and every assertion below keeps working
+    // without being rewritten to account for offsets.
+    const isControl = (sql: string) =>
+      /^\s*(BEGIN|COMMIT|ROLLBACK)\b/i.test(sql) || /pg_advisory_xact_lock/i.test(sql);
+    const clientQuery = (sql: unknown, params?: unknown) =>
+      typeof sql === "string" && isControl(sql)
+        ? Promise.resolve({ rows: [], rowCount: 0 })
+        : (queryMock as (s: unknown, p?: unknown) => Promise<unknown>)(sql, params);
     vi.doMock("@/lib/db", () => ({
-      default: { query: queryMock },
+      default: {
+        query: queryMock,
+        connect: vi.fn(async () => ({ query: clientQuery, release: vi.fn() })),
+      },
     }));
   });
 
