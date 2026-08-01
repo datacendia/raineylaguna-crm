@@ -14,11 +14,28 @@
  * Idempotent: dedupes on google_place_id (added as a column on first run).
  * Re-running only adds places discovered since last time.
  *
+ * ── THIS SCRIPT SPENDS REAL MONEY ───────────────────────────────────────
+ * It bills the Google Places "Text Search Enterprise" SKU — the phone and
+ * website fields put it in the top tier — at roughly S/ 0.085 per call. A
+ * full sweep is 58 districts × 12 niches × pages, so ~700 calls per page
+ * level. Five sweeps in July 2026 cost S/ 598.19 for 7,065 calls.
+ *
+ * It therefore refuses to spend by default. Running it with no flags prints
+ * the plan and the projected cost and makes ZERO API calls. Spending requires
+ * BOTH --live and --confirm-spend, typed deliberately.
+ *
+ * Note the previous trap: --dry-run only skipped the database writes, not the
+ * API calls, so a "dry run" was billed in full. --dry-run is now genuinely
+ * free, and it is the default.
+ *
  * Usage:
  *   $env:GOOGLE_PLACES_API_KEY='...'; $env:DATABASE_URL='...'
- *   npx tsx scripts/discover-places.ts --dry-run --districts Barranco
- *   npx tsx scripts/discover-places.ts --max-pages 2          # full sweep
+ *
+ *   # Free. Prints what would be swept and what it would cost.
  *   npx tsx scripts/discover-places.ts --districts "San Miguel,Lince"
+ *
+ *   # Spends money. Both flags required.
+ *   npx tsx scripts/discover-places.ts --live --confirm-spend --max-pages 1 --districts Barranco
  */
 import { Pool } from 'pg'
 import { config } from 'dotenv'
@@ -39,9 +56,24 @@ if (!DATABASE_URL) {
 }
 
 const args = process.argv.slice(2)
-const DRY_RUN = args.includes('--dry-run')
+
+/**
+ * Spending is opt-in, twice. `--live` says "make real calls"; `--confirm-spend`
+ * says "and I know they are billed". Two flags rather than one because the
+ * failure this guards against is a re-run from shell history, and a single
+ * flag is exactly the thing shell history remembers.
+ */
+const LIVE = args.includes('--live') && args.includes('--confirm-spend')
+/** Anything that is not an explicit, confirmed live run costs nothing. */
+const DRY_RUN = !LIVE
+
 const mpIdx = args.indexOf('--max-pages')
-const MAX_PAGES = mpIdx >= 0 ? Math.max(1, parseInt(args[mpIdx + 1], 10)) : 2
+// Default 1, not 2. Page two is the long tail: it doubles the bill for the
+// weakest half of the results.
+const MAX_PAGES = mpIdx >= 0 ? Math.max(1, parseInt(args[mpIdx + 1], 10)) : 1
+
+/** Observed rate: S/ 598.19 across 7,065 Text Search Enterprise calls. */
+const SOLES_PER_CALL = 0.0847
 const dIdx = args.indexOf('--districts')
 const DISTRICT_FILTER = dIdx >= 0 ? args[dIdx + 1].split(',').map((s) => s.trim()) : null
 
@@ -133,8 +165,36 @@ async function main() {
     for (const r of rows) seen.add(r.google_place_id)
   }
 
+  const projectedCalls = districts.length * NICHES.length * MAX_PAGES
+  const projectedCost = (projectedCalls * SOLES_PER_CALL).toFixed(2)
+
+  // Hard stop. No API call happens on this path — this is the whole point of
+  // the guard, and the reason --dry-run was not enough before: it used to skip
+  // only the database writes while still paying for every search.
+  if (DRY_RUN) {
+    console.log(
+      `\n  PLAN ONLY — no API calls made, nothing billed.\n\n` +
+        `  Districts:  ${districts.length}${DISTRICT_FILTER ? ` (${districts.join(', ')})` : ' (all)'}\n` +
+        `  Niches:     ${NICHES.length}\n` +
+        `  Pages each: ${MAX_PAGES}\n` +
+        `  ──────────────────────────────\n` +
+        `  Would make: ${projectedCalls} Text Search Enterprise calls\n` +
+        `  Would cost: ~S/ ${projectedCost}\n\n` +
+        `  To actually run it:\n` +
+        `    npx tsx scripts/discover-places.ts --live --confirm-spend${
+          DISTRICT_FILTER ? ` --districts "${districts.join(',')}"` : ''
+        } --max-pages ${MAX_PAGES}\n\n` +
+        `  Narrow it first with --districts. A full sweep re-searches every\n` +
+        `  district you have already covered, and you pay for the search even\n` +
+        `  when every result is a duplicate you already hold.\n`,
+    )
+    await pool.end()
+    return
+  }
+
   console.log(
-    `${DRY_RUN ? '[DRY RUN] ' : ''}Sweeping ${districts.length} districts × ${NICHES.length} niches (max ${MAX_PAGES} pages each)…\n`,
+    `LIVE RUN — this will bill ~S/ ${projectedCost} (${projectedCalls} calls).\n` +
+      `Sweeping ${districts.length} districts × ${NICHES.length} niches (max ${MAX_PAGES} pages each)…\n`,
   )
 
   let inserted = 0
@@ -177,10 +237,9 @@ async function main() {
             continue
           }
           const resolvedDistrict = districtFromAddress(address) ?? district
-          if (DRY_RUN) {
-            console.log(`  + ${resolvedDistrict}/${niche}: ${name} (site:${website ?? '—'} phone:${phone ?? '—'} addr:${address ?? '—'})`)
-            inserted++
-          } else {
+          {
+            // Only reachable on a confirmed live run — the plan-only path
+            // returns before any search is issued.
             try {
               const r = await pool.query(
                 // 'discovery' is the canonical lead-source bucket (see
