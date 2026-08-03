@@ -1,0 +1,86 @@
+# Uptime monitor — both production sites, every 15 minutes.
+#
+# Why this repo: GitHub Actions minutes are metered on PRIVATE repositories
+# (2,000/month free) and UNLIMITED on public ones. raineylaguna-next is
+# private, this repo is public — so the same workflow costs 2,880 minutes a
+# month there and nothing at all here. It watches both sites from here.
+#
+# Cost: zero, permanently. No third-party service, no account, no free tier to
+# outgrow.
+#
+# Why it runs OFF our own infrastructure: a monitor hosted on the box it
+# watches tells you nothing when that box is down. GitHub's runners are
+# independent of Railway and Cloudflare, which is the whole point.
+#
+# What it checks: /api/health, not the homepage. The health endpoint returns
+# ok:false when a required dependency is broken, so it catches a site that
+# renders fine while its database or config is not. A homepage check would
+# return 200 in that state and tell you nothing.
+#
+# How you get told: the job FAILS, and GitHub emails the repo owner on a
+# failed scheduled workflow by default. No secrets, no webhooks, no setup
+# beyond merging this file. Check Settings → Notifications if you want it
+# elsewhere.
+#
+# False alarms: every target is retried three times over ~90 seconds before
+# the job fails. A single blip, a Railway cold start or a momentary DNS
+# wobble will not wake you up — which is the difference between a monitor you
+# trust and one you learn to ignore.
+
+name: uptime
+
+on:
+  schedule:
+    # Every 15 minutes. GitHub may delay scheduled runs under load; that is
+    # fine for uptime checking and is why the alert threshold is three
+    # consecutive failures rather than one.
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+# Never let two checks overlap if one run is slow.
+concurrency:
+  group: uptime
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: probe production health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      # Keep probing every site even after one fails, so a single outage does
+      # not hide a second one.
+      fail-fast: false
+      matrix:
+        include:
+          - name: marketing site
+            url: https://raineylaguna.com/api/health
+          - name: CRM
+            url: https://crm.raineylaguna.com/api/health
+    steps:
+      - name: Probe ${{ matrix.name }}
+        run: |
+          set -uo pipefail
+          URL='${{ matrix.url }}'
+          ATTEMPTS=3
+          SLEEP=30
+
+          for i in $(seq 1 "$ATTEMPTS"); do
+            BODY=$(curl -sS --max-time 25 -w '\n%{http_code}' "$URL" 2>&1) || BODY=""
+            CODE=$(printf '%s' "$BODY" | tail -n1)
+            JSON=$(printf '%s' "$BODY" | sed '$d')
+
+            if [ "$CODE" = "200" ] && printf '%s' "$JSON" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+              echo "✓ ${{ matrix.name }} healthy (attempt $i)"
+              printf '%s' "$JSON" | head -c 400
+              exit 0
+            fi
+
+            echo "attempt $i/$ATTEMPTS failed — HTTP '${CODE:-none}'"
+            printf '%s' "$JSON" | head -c 400
+            echo
+            [ "$i" -lt "$ATTEMPTS" ] && sleep "$SLEEP"
+          done
+
+          echo "::error title=${{ matrix.name }} is down::$URL failed $ATTEMPTS consecutive checks"
+          exit 1
