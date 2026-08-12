@@ -24,7 +24,72 @@ import { serverEnv } from '@/lib/env'
 // matcher below, so they never reach this gate at all.)
 const PUBLIC_API_PATHS = new Set(['/api/leads/public'])
 
+/**
+ * Content-Security-Policy.
+ *
+ * This lives here rather than in next.config.js because it carries a
+ * per-request nonce. The App Router emits its bootstrap and RSC flight payload
+ * as inline <script> tags, so the previous static `script-src 'self'` blocked
+ * Next's own output: pages rendered but never hydrated, which left /login as
+ * dead HTML because its submit handler never bound.
+ *
+ * Next reads the nonce back off the *request* CSP header and stamps it onto
+ * every script it injects, so the policy keeps its teeth without falling back
+ * to 'unsafe-inline'. The nonce covers the inline tags; plain 'self' covers
+ * the /_next/static chunks they pull in. 'strict-dynamic' is deliberately not
+ * used: it makes browsers ignore 'self', so any chunk that failed to pick up
+ * the nonce would be blocked instead of merely unhardened, and this app loads
+ * no third-party scripts for it to protect against.
+ *
+ * The nonce is only reachable while a page renders, so the root layout opts
+ * out of prerendering; see src/app/layout.tsx.
+ *
+ * next.config.js must not also send a Content-Security-Policy: two of them on
+ * one response are intersected by the browser, which would re-block the very
+ * scripts this nonce exists to allow.
+ */
+function buildCsp(nonce: string): string {
+  // The dev server compiles with eval(); production bundles never do.
+  const scriptSrc = [
+    "'self'",
+    `'nonce-${nonce}'`,
+    serverEnv.NODE_ENV === 'production' ? null : "'unsafe-eval'",
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  return [
+    "default-src 'self'",
+    `script-src ${scriptSrc}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https:",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; ')
+}
+
 export async function proxy(request: NextRequest) {
+  // btoa rather than Buffer so this holds on both the Edge and Node runtimes.
+  const nonce = btoa(crypto.randomUUID())
+  const csp = buildCsp(nonce)
+
+  const withCsp = <T extends NextResponse>(response: T): T => {
+    response.headers.set('Content-Security-Policy', csp)
+    return response
+  }
+
+  // Pass-through responses carry the nonce forward on the request headers,
+  // which is where Next looks for it when rendering.
+  const passThrough = () => {
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set('x-nonce', nonce)
+    requestHeaders.set('Content-Security-Policy', csp)
+    return withCsp(NextResponse.next({ request: { headers: requestHeaders } }))
+  }
+
   const token = request.cookies.get('crm_auth')?.value
   const session = await verifySession(token)
   const path = request.nextUrl.pathname
@@ -34,12 +99,13 @@ export async function proxy(request: NextRequest) {
   const isPublicApi = PUBLIC_API_PATHS.has(path)
 
   if (!session && !isLoginPage && !isAuthApi && !isPublicApi) {
-    if (isApi) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    return NextResponse.redirect(new URL('/login', request.url))
+    if (isApi)
+      return withCsp(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+    return withCsp(NextResponse.redirect(new URL('/login', request.url)))
   }
 
   if (session && isLoginPage) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+    return withCsp(NextResponse.redirect(new URL('/dashboard', request.url)))
   }
 
   // Rolling refresh: if the session is older than one TOUCH_INTERVAL,
@@ -49,7 +115,7 @@ export async function proxy(request: NextRequest) {
   if (session) {
     const refreshed = await touchSession(session)
     if (refreshed) {
-      const response = NextResponse.next()
+      const response = passThrough()
       response.cookies.set('crm_auth', refreshed, {
         httpOnly: true,
         secure: serverEnv.NODE_ENV === 'production',
@@ -61,7 +127,7 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  return NextResponse.next()
+  return passThrough()
 }
 
 // Everything not listed here bypasses the session gate entirely, so adding a
