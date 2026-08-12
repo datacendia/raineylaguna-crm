@@ -1,7 +1,9 @@
 import type {
+  AuditConfidence,
   AuditFindings,
   AuditFlag,
   AuditScores,
+  AuditStatus,
 } from './types'
 
 /**
@@ -103,8 +105,20 @@ export function computeHealth(signals: AuditSignals): AuditFindings {
   } = signals
 
   const flags: AuditFlag[] = []
-  const findings = (score: number, summary: string): AuditFindings => ({
+  // `status` and `confidence` travel with the score so downstream readers can
+  // tell a measurement from a placeholder. The three early returns below all
+  // emit a number that nothing actually measured; before these fields existed
+  // that was indistinguishable from an observed result, and the priority model
+  // consumed it as one.
+  const findings = (
+    score: number,
+    summary: string,
+    status: AuditStatus,
+    confidence: AuditConfidence,
+  ): AuditFindings => ({
     score: clamp(Math.round(score), 0, 100),
+    status,
+    confidence,
     hadSite: hasSite,
     reachable,
     scores: lighthouse,
@@ -119,7 +133,9 @@ export function computeHealth(signals: AuditSignals): AuditFindings {
       label: 'No website at all',
       severity: 'high',
     })
-    return findings(0, 'No website — maximum opportunity')
+    // A genuine finding, not a failure: there is nothing to measure because
+    // there is nothing there.
+    return findings(0, 'No website — maximum opportunity', 'no_website', 'none')
   }
 
   if (socialOnly) {
@@ -128,7 +144,12 @@ export function computeHealth(signals: AuditSignals): AuditFindings {
       label: 'Only a social page, no real website',
       severity: 'high',
     })
-    return findings(15, 'No real website — only a social profile')
+    return findings(
+      15,
+      'No real website — only a social profile',
+      'social_only',
+      'none',
+    )
   }
 
   if (!reachable) {
@@ -137,7 +158,16 @@ export function computeHealth(signals: AuditSignals): AuditFindings {
       label: 'Website did not respond when audited',
       severity: 'high',
     })
-    return findings(10, 'Website did not respond when audited')
+    // NOT evidence the site is down. A bot block, a rate limit and a dead host
+    // are indistinguishable from here, so this is recorded as an absent
+    // measurement — the priority model declines to score it as opportunity,
+    // and outreach must not assert the site failed to load.
+    return findings(
+      10,
+      'Website could not be reached when audited (may be a block, not an outage)',
+      'unreachable',
+      'none',
+    )
   }
 
   const lh = hasLighthouse(lighthouse)
@@ -213,7 +243,10 @@ export function computeHealth(signals: AuditSignals): AuditFindings {
       : ' — heuristics only (enable PageSpeed for performance/SEO)'
   const summary = `Health ${clamp(Math.round(score), 0, 100)}/100${detail}`
 
-  return findings(score, summary)
+  // Reached the site and looked at it, so this is a real observation — but
+  // record whether performance/SEO were actually measured or whether the 50
+  // base is a stand-in. Two thirds of audited rows are heuristics-only.
+  return findings(score, summary, 'measured', lh ? 'pagespeed' : 'heuristics')
 }
 
 /** Pure: derive heuristic signals from homepage HTML + the final (post-redirect) URL. */

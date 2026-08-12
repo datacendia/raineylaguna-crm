@@ -1,4 +1,4 @@
-import type { Lead } from './types'
+import type { AuditStatus, Lead, PersistedPriorityBreakdown } from './types'
 import { tierForDistrict } from './markets'
 
 /**
@@ -15,7 +15,10 @@ import { tierForDistrict } from './markets'
  * Pure function with no I/O — deterministic for a given Lead. Used by the
  * leads list (Score column + sort), the dashboard (top-N), and the digest.
  */
-export type ScoreBand = 'Crítico' | 'Alto' | 'Medio' | 'Bajo'
+// Owned by types.ts (Lead carries a persisted band); re-exported so the
+// analytics page and any other existing importer keep working unchanged.
+export type { ScoreBand } from './types'
+import type { ScoreBand } from './types'
 
 export type PriorityBreakdown = {
   recency: number
@@ -138,15 +141,54 @@ export function getPriorityWeights(): PriorityWeights {
   return _weightsVal
 }
 
+/**
+ * Resolve a lead's audit status, falling back to what the findings jsonb
+ * recorded for rows written before the status column existed.
+ */
+function auditStatusOf(lead: Lead): AuditStatus | null {
+  if (lead.audit_status) return lead.audit_status
+  const f = lead.audit_findings
+  if (!f) return null
+  if (f.status) return f.status
+  if (f.hadSite === false) return 'no_website'
+  if (f.flags?.some((fl) => fl.id === 'social_only')) return 'social_only'
+  if (f.flags?.some((fl) => fl.id === 'site_unreachable')) return 'unreachable'
+  if (f.reachable === false) return 'unreachable'
+  return 'measured'
+}
+
 /** Returns 0..website.max based on website state. The worse it is, the bigger the sale. */
 function websitePoints(lead: Lead, w: PriorityWeights): number {
   const max = w.website.max
   // Status constants are tuned against the default max of 30; scale them so a
   // custom website.max shifts the whole band proportionally.
   const scale = (base: number) => Math.round((base * max) / 30)
+
+  const auditStatus = auditStatusOf(lead)
+
+  // An unreachable site is an ABSENT measurement, not a bad one. computeHealth
+  // stores 10 for it, and reading that as a health score turned a crawler
+  // timeout into 27/30 opportunity — beating a genuinely dreadful measured
+  // site at health 35, which earns 20/30. That inversion put failures to audit
+  // at the top of the queue: 1,498 rows, and the same rows that generate "I
+  // tried your site and it didn't load" outreach against businesses whose
+  // sites are fine and merely bot-blocked us.
+  //
+  // Scored as unknown, not as opportunity. The lead keeps its other
+  // components and gets re-audited rather than promoted.
+  if (auditStatus === 'unreachable') return scale(12)
+
   // A real digital audit, when present, is a far more precise opportunity
   // signal than the free-text status — lower health = bigger sale.
-  if (typeof lead.digital_health_score === 'number') {
+  //
+  // Distrusted only where the status positively says nothing was observed:
+  // 'unreachable' (handled above) and 'not_audited'. A null status is left
+  // trusted deliberately — that is a score of unknown provenance, not a known
+  // non-observation, and treating the two alike would change scoring for every
+  // row the migration has not reached rather than just the broken cases.
+  // 'measured' looked at the site; 'no_website' and 'social_only' are genuine
+  // findings about its absence.
+  if (typeof lead.digital_health_score === 'number' && auditStatus !== 'not_audited') {
     return Math.round(max * (1 - lead.digital_health_score / 100))
   }
   const status = (lead.website_status ?? '').toLowerCase().trim()
@@ -237,6 +279,84 @@ export function computePriorityScore(lead: Lead, now: Date = new Date()): Priori
   const why = reasons.length ? reasons.join(' · ') : 'señales mixtas'
 
   return { score, base, geoFactor, band, breakdown, why }
+}
+
+/**
+ * Stable, order-independent serialisation of a weights object.
+ *
+ * JSON.stringify alone is not enough: key order follows insertion order, so a
+ * CRM_PRIORITY_WEIGHTS override that merges the same values in a different
+ * order would produce a different string and therefore a spurious version
+ * change. Sorting keys makes the hash a function of the values only.
+ */
+function canonicalise(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(canonicalise).join(',')}]`
+  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  )
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalise(v)}`).join(',')}}`
+}
+
+/**
+ * FNV-1a, 32-bit. Deliberately not a crypto hash: this runs in the browser as
+ * well as on the server, and importing node:crypto would break the client
+ * bundle while WebCrypto's digest is async and would infect every caller. The
+ * requirement here is only "changes when the weights change", not collision
+ * resistance against an adversary.
+ */
+function fnv1a(input: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(16).padStart(8, '0')
+}
+
+/**
+ * Version tag for the weights currently in force.
+ *
+ * Stamped onto every persisted score so a score can always be traced to the
+ * configuration that produced it. Two scores with different versions are not
+ * comparable, and a version change is the signal to re-score the base.
+ *
+ * Prefixed `w1-` so the scheme itself can be revised later without the new
+ * hashes being mistaken for old ones.
+ */
+export function priorityWeightsVersion(w: PriorityWeights = getPriorityWeights()): string {
+  return `w1-${fnv1a(canonicalise(w))}`
+}
+
+/**
+ * Flatten a computed score into the columns crm_leads persists.
+ *
+ * `scoredAt` is passed in rather than defaulted to now() inside so a batch
+ * rescore stamps one timestamp across the whole sweep, which is what makes
+ * "everything scored before X is stale" a clean query.
+ */
+export function toPersistedScore(
+  score: PriorityScore,
+  scoredAt: Date = new Date(),
+  weightsVersion: string = priorityWeightsVersion(),
+): {
+  priority_score: number
+  priority_band: ScoreBand
+  priority_breakdown: PersistedPriorityBreakdown
+  priority_weights_version: string
+  priority_scored_at: string
+} {
+  return {
+    priority_score: score.score,
+    priority_band: score.band,
+    priority_breakdown: {
+      ...score.breakdown,
+      base: score.base,
+      geoFactor: score.geoFactor,
+    },
+    priority_weights_version: weightsVersion,
+    priority_scored_at: scoredAt.toISOString(),
+  }
 }
 
 /** Color token for the score badge — kept here so UI stays consistent across pages. */

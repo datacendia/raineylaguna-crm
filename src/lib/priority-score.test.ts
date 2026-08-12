@@ -1,6 +1,13 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import type { Lead } from './types'
-import { computePriorityScore, bandColor, getPriorityWeights, DEFAULT_WEIGHTS } from './priority-score'
+import {
+  computePriorityScore,
+  bandColor,
+  getPriorityWeights,
+  priorityWeightsVersion,
+  toPersistedScore,
+  DEFAULT_WEIGHTS,
+} from './priority-score'
 
 /**
  * Tests for the Smart Prioritization Score.
@@ -278,5 +285,110 @@ describe('getPriorityWeights (CRM_PRIORITY_WEIGHTS override)', () => {
     process.env.CRM_PRIORITY_WEIGHTS = '{ not valid json'
     expect(() => getPriorityWeights()).not.toThrow()
     expect(getPriorityWeights()).toEqual(DEFAULT_WEIGHTS)
+  })
+})
+
+/**
+ * The unmeasured-vs-measured inversion.
+ *
+ * computeHealth stores 10 for an unreachable site and 15 for social-only.
+ * Reading those as health scores made a crawler timeout worth 27/30 of the
+ * website component while a genuinely dreadful MEASURED site at health 35 was
+ * worth 20/30 — so failing to audit a lead promoted it above every lead that
+ * was audited and found wanting. That put crawler failures at the top of the
+ * queue and generated "I tried your site and it didn't load" outreach against
+ * businesses whose sites were merely bot-blocking us.
+ */
+describe('unmeasured websites are not treated as opportunity', () => {
+  const NOW2 = new Date('2026-05-08T12:00:00Z')
+
+  const unreachable = baseLead({
+    website_url: 'https://bodytechperu.com/',
+    digital_health_score: 10,
+    audit_status: 'unreachable',
+  })
+  const measuredBad = baseLead({
+    website_url: 'https://example.com/',
+    digital_health_score: 35,
+    audit_status: 'measured',
+  })
+
+  it('ranks a measured-bad site above an unreachable one', () => {
+    const u = computePriorityScore(unreachable, NOW2)
+    const m = computePriorityScore(measuredBad, NOW2)
+    expect(m.breakdown.website).toBeGreaterThan(u.breakdown.website)
+    expect(m.score).toBeGreaterThan(u.score)
+  })
+
+  it('scores an unreachable site as unknown, not as maximum opportunity', () => {
+    const ps = computePriorityScore(unreachable, NOW2)
+    // The neutral "unknown state" value, not the 27 the health score implied.
+    expect(ps.breakdown.website).toBe(12)
+  })
+
+  it('still trusts a genuine no-website finding', () => {
+    // 'no_website' is an observation about absence, not a failure to observe.
+    const ps = computePriorityScore(
+      baseLead({ digital_health_score: 0, audit_status: 'no_website' }),
+      NOW2,
+    )
+    expect(ps.breakdown.website).toBe(30)
+  })
+
+  it('infers status from findings on rows predating the audit_status column', () => {
+    const legacy = baseLead({
+      website_url: 'https://bodytechperu.com/',
+      digital_health_score: 10,
+      audit_findings: {
+        score: 10,
+        hadSite: true,
+        reachable: false,
+        scores: { performance: null, seo: null, accessibility: null, bestPractices: null },
+        metrics: { lcpMs: null },
+        flags: [{ id: 'site_unreachable', label: 'Website did not respond', severity: 'high' }],
+        summary: 'Website did not respond when audited',
+      },
+    })
+    expect(computePriorityScore(legacy, NOW2).breakdown.website).toBe(12)
+  })
+})
+
+describe('weights version stamp', () => {
+  afterEach(() => {
+    delete process.env.CRM_PRIORITY_WEIGHTS
+  })
+
+  it('is stable for identical weights and changes when they change', () => {
+    delete process.env.CRM_PRIORITY_WEIGHTS
+    const a = priorityWeightsVersion()
+    const b = priorityWeightsVersion()
+    expect(a).toBe(b)
+
+    process.env.CRM_PRIORITY_WEIGHTS = JSON.stringify({ niche: { default: 19 } })
+    expect(priorityWeightsVersion()).not.toBe(a)
+  })
+
+  it('does not depend on key order', () => {
+    const w1 = { ...DEFAULT_WEIGHTS }
+    const w2 = {
+      geo: DEFAULT_WEIGHTS.geo,
+      bands: DEFAULT_WEIGHTS.bands,
+      workability: DEFAULT_WEIGHTS.workability,
+      niche: DEFAULT_WEIGHTS.niche,
+      website: DEFAULT_WEIGHTS.website,
+      recency: DEFAULT_WEIGHTS.recency,
+    }
+    expect(priorityWeightsVersion(w1)).toBe(priorityWeightsVersion(w2))
+  })
+
+  it('flattens a score into the persisted columns', () => {
+    const ps = computePriorityScore(baseLead(), NOW)
+    const row = toPersistedScore(ps, new Date('2026-08-12T00:00:00Z'))
+    expect(row.priority_score).toBe(ps.score)
+    expect(row.priority_band).toBe(ps.band)
+    expect(row.priority_breakdown.base).toBe(ps.base)
+    expect(row.priority_breakdown.geoFactor).toBe(ps.geoFactor)
+    expect(row.priority_weights_version).toMatch(/^w1-[0-9a-f]{8}$/)
+    expect(row.priority_scored_at).toBe('2026-08-12T00:00:00.000Z')
   })
 })

@@ -78,6 +78,8 @@ export const config = {
     '/dashboard/:path*',
     '/login',
     '/api/analytics',
+    // Revenue, LTV, churn and cohort figures — commercial data, gated.
+    '/api/modeling',
     '/api/leads/:path*',
     '/api/outreach/:path*',
     '/api/video-audits/:path*',
