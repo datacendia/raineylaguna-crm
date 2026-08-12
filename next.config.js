@@ -7,10 +7,14 @@
  * should not be less hardened than the public marketing site — which already
  * ships a full set while this app shipped none.
  *
- * The CSP here is stricter than raineylaguna.com's on purpose: this app renders
- * no third-party embeds and loads no external scripts, so everything stays
- * same-origin. 'unsafe-inline' is kept for style-src only, because Next injects
- * inline styles; script-src does not need it.
+ * The Content-Security-Policy is deliberately NOT here. It carries a
+ * per-request nonce, so it is issued from src/proxy.ts instead; see the
+ * comment there. Sending a second, static CSP from this file would not add
+ * defence — the browser intersects multiple CSP headers, so the static one
+ * would cancel the nonce out and re-break hydration.
+ *
+ * X-Frame-Options already covers framing for every route, including the ones
+ * outside the proxy matcher.
  */
 const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
@@ -18,20 +22,6 @@ const securityHeaders = [
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
-  {
-    key: 'Content-Security-Policy',
-    value: [
-      "default-src 'self'",
-      "script-src 'self'",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https:",
-      "font-src 'self' data:",
-      "connect-src 'self'",
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join('; '),
-  },
 ]
 
 const nextConfig = {
