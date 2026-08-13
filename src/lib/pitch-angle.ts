@@ -38,6 +38,22 @@ export type PitchAngle = {
   talkingPoints: string[]
   /** Flag ids the angle is built from — provenance, so nothing is fabricated. */
   flags: string[]
+  /**
+   * True when the angle rests on something the crawler could not confirm, and
+   * a human must check before this goes anywhere near a prospect.
+   *
+   * The only current cause is `site_unreachable`. From the crawler's position
+   * a bot block, a rate limit and a genuinely dead host are identical, and
+   * 1,498 rows carry that flag — including Bodytech, whose site
+   * (bodytechperu.com) is a live estate for a major gym chain. Telling that
+   * prospect their website is down is a credibility problem in the first
+   * sentence, and it was the default opener for every one of those rows.
+   *
+   * Send paths must refuse to auto-send while this is true.
+   */
+  requiresVerification: boolean
+  /** Operator-facing reason, set whenever requiresVerification is true. */
+  verificationNote?: string
 }
 
 type Copy = {
@@ -76,14 +92,16 @@ const COPY: Record<string, Copy> = {
     },
   },
   site_unreachable: {
-    weight: 90,
+    // Demoted below every MEASURED signal. This is an absent observation, not
+    // a finding, so it must never outrank something the crawler actually saw.
+    weight: 5,
     es: {
-      clause: 'su sitio web no carga / está caído',
-      point: 'La web no responde: cada visita perdida es un cliente que se va a otro',
+      clause: 'no pude cargar su sitio web desde nuestro lado',
+      point: 'La web no cargó al auditar — verificar manualmente: puede ser un bloqueo de bots, no una caída',
     },
     en: {
-      clause: "their website doesn't load / is down",
-      point: 'Site is down: every failed visit is a customer lost to someone else',
+      clause: "I couldn't load their website from our side",
+      point: 'Site did not load when audited — verify manually: may be a bot block, not an outage',
     },
   },
   no_https: {
@@ -209,7 +227,10 @@ function buildOpening(name: string, top: AuditFlag, locale: Locale): string {
       case 'social_only':
         return `${name} solo aparece en redes sociales; una web propia te daría credibilidad y presencia en Google todo el día.`
       case 'site_unreachable':
-        return `Intenté entrar a la web de ${name} y no cargó — cada visita perdida es un cliente que se va a otro.`
+        // Deliberately does not assert an outage — see requiresVerification.
+        // Phrased as the operator's own experience being inconclusive, which
+        // survives the case where the site is in fact perfectly healthy.
+        return `Quise revisar la web de ${name} y no pude cargarla desde aquí — ¿sigue activa? Si lo está, vale la pena ver por qué a algunos visitantes no les abre.`
       default:
         return `Revisé la web de ${name} y noté que ${c.clause} — eso te está costando clientes en silencio.`
     }
@@ -220,7 +241,8 @@ function buildOpening(name: string, top: AuditFlag, locale: Locale): string {
     case 'social_only':
       return `${name} only shows up on social media; a real website would give you credibility and round-the-clock presence on Google.`
     case 'site_unreachable':
-      return `I tried to open ${name}'s website and it wouldn't load — every failed visit is a customer lost to someone else.`
+      // See the Spanish branch: a question, not an assertion of downtime.
+      return `I couldn't load ${name}'s website from my end — is it still live? If it is, it's worth finding out why it doesn't open for some visitors.`
     default:
       return `I took a look at ${name}'s website and noticed ${c.clause} — that's quietly costing you customers.`
   }
@@ -249,6 +271,7 @@ export function buildPitchAngle(lead: PitchAngleInput): PitchAngle {
           : `I haven't audited ${name} yet; a quick audit will surface the best angle to lead with.`,
       talkingPoints: [],
       flags: [],
+      requiresVerification: false,
     }
   }
 
@@ -271,6 +294,7 @@ export function buildPitchAngle(lead: PitchAngleInput): PitchAngle {
           ? ['Optimizar la conversión de la web existente', 'Campañas y contenido para crecer el tráfico']
           : ['Optimise conversion on the existing site', 'Content & campaigns to grow traffic'],
       flags: [],
+      requiresVerification: false,
     }
   }
 
@@ -283,5 +307,28 @@ export function buildPitchAngle(lead: PitchAngleInput): PitchAngle {
       ? `${name}: ${COPY[ranked[0].id].es.point}${extra > 0 ? ` (+${extra} señal${extra > 1 ? 'es' : ''} más)` : ''}`
       : `${name}: ${COPY[ranked[0].id].en.point}${extra > 0 ? ` (+${extra} more signal${extra > 1 ? 's' : ''})` : ''}`
 
-  return { locale, headline, opening, talkingPoints, flags: top.map((f) => f.id) }
+  // An angle built on an unreachable site is built on an absent observation,
+  // so it is flagged for human verification rather than sent.
+  const unverified = ranked[0].id === 'site_unreachable'
+
+  return {
+    locale,
+    headline: unverified
+      ? locale === 'es'
+        ? `${name}: la web no cargó al auditar — VERIFICAR antes de contactar`
+        : `${name}: site did not load when audited — VERIFY before contacting`
+      : headline,
+    opening,
+    talkingPoints,
+    flags: top.map((f) => f.id),
+    requiresVerification: unverified,
+    ...(unverified
+      ? {
+          verificationNote:
+            locale === 'es'
+              ? 'El crawler no pudo cargar la web. Puede ser un bloqueo de bots o un límite de peticiones, no una caída. Ábrela manualmente antes de enviar nada.'
+              : 'The crawler could not load the site. That may be a bot block or a rate limit rather than an outage. Open it manually before sending anything.',
+        }
+      : {}),
+  }
 }

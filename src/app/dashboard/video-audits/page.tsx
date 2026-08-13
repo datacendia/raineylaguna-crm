@@ -2,15 +2,18 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { type Lead, type VideoAudit } from '@/lib/types'
+import { type VideoAudit } from '@/lib/types'
+import { usePagedLeads } from '@/lib/use-paged-leads'
+import { TruncationNotice } from '@/components/TruncationNotice'
 
 export default function VideoAuditsPage() {
-  const [leads, setLeads] = useState<Lead[]>([])
+  // The lead picker below used to render an <option> for all 36,809 leads.
+  const { leads, total: leadTotal, loading: leadsLoading, loadMore: loadMoreLeads } =
+    usePagedLeads()
   const [audits, setAudits] = useState<VideoAudit[]>([])
   const [form, setForm] = useState({ lead_id: '', loom_url: '' })
 
   const reload = () => {
-    fetch('/api/leads').then((r) => r.json()).then((d) => setLeads(Array.isArray(d) ? d : []))
     fetch('/api/video-audits').then((r) => r.json()).then((d) => setAudits(Array.isArray(d) ? d : []))
   }
   useEffect(reload, [])
@@ -48,6 +51,12 @@ export default function VideoAuditsPage() {
               <option value="">Select a lead…</option>
               {leads.map((l) => <option key={l.id} value={l.id}>{l.name} — {l.district}</option>)}
             </select>
+            <TruncationNotice
+              shown={leads.length}
+              total={leadTotal}
+              onLoadMore={loadMoreLeads}
+              loading={leadsLoading}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Loom URL</label>

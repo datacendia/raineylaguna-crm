@@ -86,3 +86,54 @@ describe('sendOutreach — manual-only markets never auto-send on any channel', 
     expect(out.status === 'manual' && out.reason).toContain('manual_market:Buenos Aires')
   })
 })
+
+/**
+ * Copy built on a site we never reached must not auto-send.
+ *
+ * The crawler cannot distinguish a bot block from an outage, so 1,498 leads
+ * flagged `unreachable` would each have gone out claiming the prospect's
+ * website was down. The gate routes them to the operator instead — the lead is
+ * valid, it is the claim that is unverified.
+ */
+describe('sendOutreach — unverified unreachable sites are never auto-sent', () => {
+  it('routes an unreachable lead to the operator on any channel', async () => {
+    for (const channel of ['WhatsApp', 'Email']) {
+      const out = await sendOutreach({
+        channel,
+        body: 'hola',
+        phone: '+51999999999',
+        email: 'a@b.com',
+        city: 'Lima', // a market that WOULD otherwise auto-send
+        auditStatus: 'unreachable',
+      })
+      expect(out.status, channel).toBe('manual')
+      if (out.status !== 'manual') return
+      expect(out.reason).toBe('unverified_unreachable_site')
+    }
+  })
+
+  it('does not block a measured lead', async () => {
+    const out = await sendOutreach({
+      channel: 'Email',
+      body: 'hola',
+      email: 'a@b.com',
+      city: 'Lima',
+      auditStatus: 'measured',
+    })
+    expect(out.status === 'manual' && out.reason === 'unverified_unreachable_site').toBe(
+      false,
+    )
+  })
+
+  it('does not block when the status is unknown, so existing callers are unaffected', async () => {
+    const out = await sendOutreach({
+      channel: 'Email',
+      body: 'hola',
+      email: 'a@b.com',
+      city: 'Lima',
+    })
+    expect(out.status === 'manual' && out.reason === 'unverified_unreachable_site').toBe(
+      false,
+    )
+  })
+})

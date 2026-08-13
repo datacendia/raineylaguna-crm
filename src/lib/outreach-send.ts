@@ -26,6 +26,7 @@ import { emailAllowedForLead } from './contactability'
 import { serverEnv } from './env'
 import pool from './db'
 import { isSuppressed } from './suppression'
+import type { AuditStatus } from './types'
 
 export type Channel = 'Email' | 'Instagram DM' | 'WhatsApp' | 'LinkedIn'
 
@@ -88,6 +89,27 @@ export interface SendInput {
   /** Lead's market/city (markets.ts). Drives the automated-WhatsApp
    *  compliance gate — see whatsappAllowedForCity. */
   city?: string | null
+  /**
+   * Lead's audit status. `unreachable` blocks the auto-send — see
+   * unverifiedUnreachable below. Omitted means "unknown", which does not
+   * block, so existing callers are unaffected until they pass it.
+   */
+  auditStatus?: AuditStatus | null
+}
+
+/**
+ * Would this send go out on the back of a site we never actually reached?
+ *
+ * The crawler cannot tell a bot block from an outage, and 1,498 leads carry
+ * `unreachable`. Every one of them generated an opener asserting the
+ * prospect's website was down — including Bodytech, a major gym chain whose
+ * site is live and simply blocked us. Asserting a false outage in the first
+ * sentence of a cold approach is the most expensive kind of wrong.
+ *
+ * Exported so the drafts UI can warn before an operator clicks send.
+ */
+export function unverifiedUnreachable(auditStatus?: AuditStatus | null): boolean {
+  return auditStatus === 'unreachable'
 }
 
 const DEFAULT_EMAIL_SUBJECT = 'Una observación sobre su presencia digital'
@@ -133,6 +155,16 @@ export async function sendOutreach(input: SendInput): Promise<SendOutcome> {
     const msg = err instanceof Error ? err.message : 'unknown'
     console.error('[outreach-send] suppression lookup failed, refusing to send:', msg)
     return { status: 'pending', reason: `suppression_check_failed:${msg}` }
+  }
+
+  // Never auto-send copy built on a site we could not reach. Routed to the
+  // operator rather than suppressed: the lead is perfectly valid, it is the
+  // CLAIM that is unverified, and once a human confirms the site's real state
+  // the message can go out with an accurate hook.
+  //
+  // Sits above the market and channel gates so it applies on every channel.
+  if (unverifiedUnreachable(input.auditStatus)) {
+    return { status: 'manual', reason: 'unverified_unreachable_site' }
   }
 
   // Manual-only markets (markets.ts): the operator contacts every lead by hand,

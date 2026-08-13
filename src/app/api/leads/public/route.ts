@@ -86,6 +86,39 @@ function toSeverity(s?: string): AuditFlagSeverity {
 }
 
 /**
+ * Stable flag id for a finding arriving from the public audit tool.
+ *
+ * Maps the well-known titles onto the SAME ids computeHealth emits, so an
+ * audit run from raineylaguna.com and one run inside the CRM are countable
+ * together — previously they could never be, because intake ids were array
+ * indexes. Anything unrecognised gets a slug of its own title, prefixed so its
+ * provenance stays visible and it can never collide with a CRM-native id.
+ */
+export function intakeFlagId(title: string): string {
+  const t = String(title).toLowerCase()
+  if (t.includes('https') || t.includes('segur')) return 'no_https'
+  if (t.includes('mobile') || t.includes('móvil') || t.includes('movil')) return 'not_mobile'
+  if (t.includes('lcp') || t.includes('lenta') || t.includes('slow')) return 'slow_lcp'
+  if (t.includes('performance') || t.includes('rendimiento')) return 'poor_performance'
+  if (t.includes('seo')) return 'weak_seo'
+  if (t.includes('accesibil') || t.includes('accessib')) return 'weak_accessibility'
+  if (t.includes('analytic') || t.includes('analítica') || t.includes('analitica'))
+    return 'no_analytics'
+  if (t.includes('structured') || t.includes('estructurad') || t.includes('preview'))
+    return 'no_structured_data'
+  if (t.includes('copyright') || t.includes('desactualiz') || t.includes('stale'))
+    return 'stale'
+
+  const slug = t
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40)
+  return slug ? `intake_${slug}` : 'intake_unknown'
+}
+
+/**
  * Map the marketing site's audit payload into the CRM's AuditFindings shape so
  * the leads list + detail page render it with the same component used for a
  * CRM-run audit. Returns null when the payload carries no usable score.
@@ -100,8 +133,17 @@ function mapIntakeAudit(
   const flags: AuditFlag[] = Array.isArray(audit.findings)
     ? audit.findings
         .filter((f): f is IntakeAuditFinding => Boolean(f && f.title))
-        .map((f, i) => ({
-          id: `web_${i}`,
+        .map((f) => ({
+          // Derived from the finding's own title, NOT from its array position.
+          // `web_${i}` put the index in the id, so the same finding got a
+          // different id depending on what else happened to be in the payload,
+          // and the ids web_0..web_13 leaked into audit_findings as though they
+          // were flag types. The analytics "Top opportunity signals" panel
+          // groups by flag id, so it has been reporting a signal called
+          // "web_0" — which is an array subscript, not a signal.
+          // String() because the filter's predicate keeps `title` optional
+          // even though it has already been checked for truthiness.
+          id: intakeFlagId(String(f.title)),
           label: f.detail ? `${f.title} — ${f.detail}` : String(f.title),
           severity: toSeverity(f.severity),
         }))

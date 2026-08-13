@@ -48,6 +48,7 @@
 import { Pool, type PoolClient } from 'pg'
 import { config } from 'dotenv'
 import { sendOutreach } from '../src/lib/outreach-send'
+import type { AuditStatus } from '../src/lib/types'
 
 config({ path: '.env.local' })
 
@@ -72,12 +73,14 @@ type DueEvent = {
   phone: string | null
   email: string | null
   city: string | null
+  /** Blocks the send when 'unreachable' — see unverifiedUnreachable. */
+  audit_status: string | null
 }
 
 /** Oldest due, not-yet-attempted Pending event, locked for this run only. */
 const SELECT_NEXT_DUE = `
   SELECT e.id, e.lead_id, e.channel::text AS channel, e.notes AS body, e.subject,
-         l.phone, l.email, l.city
+         l.phone, l.email, l.city, l.audit_status
     FROM crm_outreach_events e
     JOIN crm_leads l ON l.id = e.lead_id AND l.deleted_at IS NULL
    WHERE e.status = 'Pending'
@@ -225,6 +228,7 @@ async function drainLive(pool: Pool): Promise<{ sent: number; deferred: number; 
         email: ev.email,
         city: ev.city,
         eventId: ev.id,
+        auditStatus: ev.audit_status as AuditStatus | null,
       })
     } catch (sendErr) {
       const msg = sendErr instanceof Error ? sendErr.message : 'unknown'

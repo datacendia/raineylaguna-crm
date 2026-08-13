@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
 import { verifySession } from '@/lib/auth'
 import { sendOutreach, isManualChannel } from '@/lib/outreach-send'
+import type { AuditStatus } from '@/lib/types'
 
 export const runtime = 'nodejs'
 
@@ -30,7 +31,7 @@ export async function POST(
     const actor = session?.email ?? null
 
     const draftRes = await pool.query(
-      `SELECT d.*, l.phone, l.email, l.city
+      `SELECT d.*, l.phone, l.email, l.city, l.audit_status
          FROM crm_outreach_drafts d
          JOIN crm_leads l ON l.id = d.lead_id
         WHERE d.id = $1 AND l.deleted_at IS NULL`,
@@ -48,6 +49,8 @@ export async function POST(
       phone: string | null
       email: string | null
       city: string | null
+      /** 'unreachable' routes the send to the operator for verification. */
+      audit_status: AuditStatus | null
     }
     if (draft.status !== 'pending') {
       return NextResponse.json({ error: 'draft already acted on' }, { status: 409 })
@@ -87,6 +90,7 @@ export async function POST(
       email: draft.email,
       city: draft.city,
       eventId,
+      auditStatus: draft.audit_status ?? null,
     })
 
     if (outcome.status === 'sent') {

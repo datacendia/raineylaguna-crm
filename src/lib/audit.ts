@@ -155,7 +155,7 @@ export function computeHealth(signals: AuditSignals): AuditFindings {
   if (!reachable) {
     flags.push({
       id: 'site_unreachable',
-      label: 'Website did not respond when audited',
+      label: 'Website could not be reached when audited (may be a bot block, not an outage)',
       severity: 'high',
     })
     // NOT evidence the site is down. A bot block, a rate limit and a dead host

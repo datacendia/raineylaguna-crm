@@ -97,3 +97,52 @@ describe('buildPitchAngle', () => {
     expect(a.talkingPoints.every((p) => p.length > 0)).toBe(true)
   })
 })
+
+/**
+ * An unreachable site is an absent measurement, not a finding.
+ *
+ * 1,498 leads carry site_unreachable, and every one produced an opener
+ * asserting the prospect's website was down. Bodytech's row points at
+ * bodytechperu.com — a live estate for a major gym chain that almost certainly
+ * rate-limited or bot-blocked the crawler. Telling that prospect their site is
+ * broken is a credibility problem in the first sentence.
+ */
+describe('unreachable sites never assert an outage', () => {
+  const unreachable = lead({
+    name: 'Bodytech',
+    audit_findings: { flags: [flag('site_unreachable')] },
+  })
+
+  it('asks rather than asserts, in both locales', () => {
+    const es = buildPitchAngle({ ...unreachable, city: 'Lima' })
+    const en = buildPitchAngle({ ...unreachable, city: 'Boston' })
+    // No claim of downtime anywhere in the copy that reaches a prospect.
+    expect(es.opening).not.toMatch(/no cargó|está caído|no responde/i)
+    expect(en.opening).not.toMatch(/is down|wouldn't load|won't load/i)
+    // Phrased from our side, and asking.
+    expect(es.opening).toMatch(/desde aquí|\?/)
+    expect(en.opening).toMatch(/from my end|\?/)
+  })
+
+  it('flags the angle for human verification and says why', () => {
+    const a = buildPitchAngle(unreachable)
+    expect(a.requiresVerification).toBe(true)
+    expect(a.verificationNote).toMatch(/bloqueo de bots|bot block/i)
+  })
+
+  it('does not flag angles built on real findings', () => {
+    const a = buildPitchAngle(lead({ audit_findings: { flags: [flag('no_https')] } }))
+    expect(a.requiresVerification).toBe(false)
+    expect(a.verificationNote).toBeUndefined()
+  })
+
+  it('ranks any measured signal above an unreachable one', () => {
+    // Both 'high' severity, so this is decided by weight: the absent
+    // observation must never lead when something was actually seen.
+    const a = buildPitchAngle(
+      lead({ audit_findings: { flags: [flag('site_unreachable'), flag('no_https')] } }),
+    )
+    expect(a.flags[0]).toBe('no_https')
+    expect(a.requiresVerification).toBe(false)
+  })
+})

@@ -20,6 +20,7 @@ export default function DashboardLayout({
         <nav className="space-y-4 flex-1">
           <Link href="/dashboard" className="block hover:text-vermilion">Dashboard</Link>
           <Link href="/dashboard/analytics" className="block hover:text-vermilion">Analytics</Link>
+          <Link href="/dashboard/modeling" className="block hover:text-vermilion">Modelling</Link>
           <Link href="/dashboard/digest" className="block hover:text-vermilion">Monday digest</Link>
           <Link href="/dashboard/leads" className="block hover:text-vermilion">Leads</Link>
           <Link href="/dashboard/pipeline" className="block hover:text-vermilion">Pipeline</Link>
