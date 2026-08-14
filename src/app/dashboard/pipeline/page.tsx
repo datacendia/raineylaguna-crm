@@ -1,16 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { STAGES, type Lead, type PipelineStage } from '@/lib/types'
+import { STAGES, type PipelineStage } from '@/lib/types'
+import { usePagedLeads } from '@/lib/use-paged-leads'
+import { TruncationNotice } from '@/components/TruncationNotice'
 
 export default function PipelinePage() {
-  const [leads, setLeads] = useState<Lead[]>([])
-
-  const load = () => {
-    fetch('/api/leads').then((r) => r.json()).then((d) => setLeads(Array.isArray(d) ? d : []))
-  }
-  useEffect(load, [])
+  // Was fetching all 36,809 leads and rendering a kanban card for every one.
+  const { leads, setLeads, total, loading, loadMore } = usePagedLeads()
 
   // Shared mover used by both desktop drag-drop and the mobile stage <select>.
   const moveLead = async (id: string, stage: PipelineStage) => {
@@ -36,6 +33,15 @@ export default function PipelinePage() {
         <span className="lg:hidden">Swipe across stages and use each card’s menu</span>
         {' '}to update stage.
       </p>
+      {/* The column counts below are counts of THIS PAGE, not of the pipeline.
+          Saying so matters here more than anywhere: a kanban that silently
+          shows 500 of 36,809 reads as a complete pipeline. */}
+      <TruncationNotice
+        shown={leads.length}
+        total={total}
+        onLoadMore={loadMore}
+        loading={loading}
+      />
       {/* Mobile: swipeable horizontal kanban (snap). Desktop: 5-col grid. */}
       <div className="flex lg:grid lg:grid-cols-5 gap-4 overflow-x-auto lg:overflow-visible snap-x snap-mandatory pb-3 -mx-4 px-4 sm:mx-0 sm:px-0">
         {STAGES.map((stage) => {

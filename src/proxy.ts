@@ -144,6 +144,12 @@ export const config = {
     '/dashboard/:path*',
     '/login',
     '/api/analytics',
+    // Revenue, LTV, churn and cohort figures — commercial data, gated.
+    '/api/modeling',
+    // Contract values, churn reasons and acquisition costs. Both the
+    // collection and the item route, or PATCH /api/deals/<id> is wide open.
+    '/api/deals',
+    '/api/deals/:path*',
     '/api/leads/:path*',
     '/api/outreach/:path*',
     '/api/video-audits/:path*',

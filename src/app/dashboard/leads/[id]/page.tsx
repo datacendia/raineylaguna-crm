@@ -3,6 +3,7 @@
 import { useEffect, useState, use } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { DealPanel } from '@/components/DealPanel'
 import { STAGES, CHANNELS, type Lead, type OutreachEvent, type OutreachDraft, type VideoAudit } from '@/lib/types'
 import ScriptPanel from '@/components/ScriptPanel'
 import TagEditor from '@/components/TagEditor'
@@ -462,6 +463,10 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             <p className="text-xs text-gray-400 mt-1">Hidden from default leads list while snoozed.</p>
           </div>
         </div>
+
+        {/* The only write path for commercial outcomes. Every value model is
+            refused until something here is filled in. */}
+        <DealPanel leadId={lead.id} />
 
         <div className="mt-6">
           <label className="block text-sm font-medium mb-2">Pipeline Stage</label>

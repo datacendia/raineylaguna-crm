@@ -146,3 +146,52 @@ describe('healthColor / severityColor', () => {
     }
   })
 })
+
+/**
+ * Status and confidence travel with the score.
+ *
+ * Half of all audited rows carry a score that measured nothing: 15 for
+ * social-only, 10 for unreachable, 50 as the "no PageSpeed" placeholder. Those
+ * three constants were indistinguishable from observations, and the priority
+ * model consumed them as such. These tests pin the distinction.
+ */
+describe('audit status and confidence', () => {
+  it('marks an unreachable site as an absent measurement, not a bad one', () => {
+    const f = computeHealth(baseSignals({ reachable: false }))
+    expect(f.status).toBe('unreachable')
+    expect(f.confidence).toBe('none')
+    // The 10 is retained for backwards compatibility with existing readers,
+    // but the status is what callers must branch on.
+    expect(f.score).toBe(10)
+  })
+
+  it('does not claim an unreachable site is down', () => {
+    // A bot block, a rate limit and a dead host are indistinguishable from the
+    // crawler's position, and asserting an outage in outreach against a live
+    // site is a credibility problem at first contact.
+    const f = computeHealth(baseSignals({ reachable: false }))
+    expect(f.summary).not.toMatch(/did not respond/i)
+    expect(f.summary).toMatch(/could not be reached/i)
+  })
+
+  it('treats no-website and social-only as genuine findings', () => {
+    expect(computeHealth(baseSignals({ hasSite: false })).status).toBe('no_website')
+    expect(computeHealth(baseSignals({ socialOnly: true })).status).toBe('social_only')
+  })
+
+  it('distinguishes a PageSpeed-backed score from a heuristics-only one', () => {
+    // No Lighthouse categories at all — the 1,772 rows whose 50 is a
+    // placeholder rather than a measurement.
+    const heuristic = computeHealth(baseSignals({ lighthouse: noScores() }))
+    expect(heuristic.status).toBe('measured')
+    expect(heuristic.confidence).toBe('heuristics')
+
+    const measured = computeHealth(
+      baseSignals({
+        lighthouse: { performance: 40, seo: 60, accessibility: 70, bestPractices: 80 },
+      }),
+    )
+    expect(measured.status).toBe('measured')
+    expect(measured.confidence).toBe('pagespeed')
+  })
+})
